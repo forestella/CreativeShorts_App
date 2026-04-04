@@ -186,46 +186,6 @@ class VideoProcessor:
         except Exception as e:
             logger.error(f"음성 분석 공백 제거 실패: {e}")
             return clip, []
-    def _create_transformative_clip(self, clip, visual_type="original", size=(1080, 1920), ai_image_path=None):
-        """visual_type에 따라 영상의 레이아웃을 변형하여 반환합니다."""
-        target_w, target_h = size
-        duration = clip.duration
-        
-        # 기본 배경 (검정)
-        bg = ImageClip(np.array(PIL.Image.new('RGB', (target_w, target_h), (0, 0, 0)))).set_duration(duration)
-        
-        if visual_type == "ai_opening" and ai_image_path and os.path.exists(ai_image_path):
-            # AI 생성 이미지를 배경으로 사용
-            opening_img = ImageClip(ai_image_path).set_duration(duration).resize(height=target_h)
-            if opening_img.w > target_w:
-                opening_img = opening_img.crop(x_center=opening_img.w/2, width=target_w)
-            return CompositeVideoClip([opening_img], size=size)
-
-        if visual_type == "blurred_bg":
-            # 1. 배경용 블러 처리 (확대 후 블러)
-            bg_blur = clip.resize(height=target_h).fx(vfx.colorx, 0.5).fx(vfx.gaussian_blur, 15)
-            if bg_blur.w > target_w:
-                bg_blur = bg_blur.crop(x_center=bg_blur.w/2, width=target_w)
-            else:
-                bg_blur = bg_blur.resize(width=target_w)
-            
-            # 2. 전경용 메인 영상 (비율 유지하며 중앙 배치)
-            fg = clip.resize(width=target_w * 0.9) # 가로 90% 크기
-            return CompositeVideoClip([bg_blur, fg.set_position("center")], size=size)
-
-        elif visual_type == "framed":
-            # 감각적인 그라데이션 대신 단색/블러 배경 + 프레임
-            bg_framed = ImageClip(np.array(PIL.Image.new('RGB', (target_w, target_h), (20, 20, 25)))).set_duration(duration)
-            fg = clip.resize(width=target_w * 0.85)
-            # 프레임 느낌을 주기 위해 약간의 패딩과 테두리 효과 (여기서는 단순 배치)
-            return CompositeVideoClip([bg_framed, fg.set_position(("center", "center"))], size=size)
-
-        else:
-            # 기본 (중앙 배치)
-            fg = clip.resize(width=target_w)
-            if fg.h > target_h:
-                fg = fg.crop(y_center=fg.h/2, height=target_h)
-            return CompositeVideoClip([bg, fg.set_position("center")], size=size)
 
     def create_title_clip_pil(self, text, duration, position, title_color_mode="기본 (위:노랑 / 아래:연두)"):
         try:
@@ -426,14 +386,11 @@ class VideoProcessor:
                                 if sub.audio: sub = sub.set_audio(sub.audio.fx(afx.audio_fadeout, 0.2))
                             temp_tts_files.append(tts_path); temp_tts_audios.append(tts_audio)
                         except Exception as e: logger.error(f"보이스오버 삽입 실패: {e}")
-                # [수정] 전문적인 큐레이션 레이아웃 적용 (블러 배경 / 프레임 등)
-                v_type = seg.get('visual_type', 'blurred_bg')
-                ai_path = seg.get('ai_image_path')
-                
-                # 시각적 변형 레이아웃 생성
-                fs_base = self._create_transformative_clip(sub, visual_type=v_type, ai_image_path=ai_path)
-                final_dur = fs_base.duration
-                segment_clips = [fs_base]
+                w, h = sub.size
+                base_side = min(w, h); crop_side = base_side / zoom_factor
+                sub_resized = sub.crop(x1=(w-crop_side)/2, y1=(h-crop_side)/2, width=crop_side, height=crop_side).resize(width=1080, height=1080)
+                final_dur = sub_resized.duration
+                segment_clips = [ImageClip(np.array(PIL.Image.new('RGB', (1080, 1920), (0, 0, 0)))).set_duration(final_dur), sub_resized.set_position(('center', 420))]
                 if 'subtitle_clips' in locals() and subtitle_clips: segment_clips.extend(subtitle_clips)
                 if use_bypass_filter: segment_clips.append(ImageClip(np.array(PIL.Image.new('RGBA', (1080, 1920), (255, 150, 0, 12)))).set_duration(final_dur).set_position(('center', 'center')))
                 if title_text:

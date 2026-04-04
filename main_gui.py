@@ -57,14 +57,13 @@ class AnalysisWorker(QObject):
     finished = pyqtSignal(dict, str, str) # data, vid, video_path
     error = pyqtSignal(str)
 
-    def __init__(self, url, voice, model_name, ignore_cache, multimodal_mode=False, curator_mode=True):
+    def __init__(self, url, voice, model_name, ignore_cache, multimodal_mode=False):
         super().__init__()
         self.url = url
         self.voice = voice
         self.model_name = model_name
         self.ignore_cache = ignore_cache
         self.multimodal_mode = multimodal_mode
-        self.curator_mode = curator_mode
 
     def run(self):
         try:
@@ -84,8 +83,8 @@ class AnalysisWorker(QObject):
                 if not os.path.exists(vtt_path):
                     print("   ❌ 사용할 수 있는 영어(.en.vtt) 자막이 없습니다. 자동 분석이 어려울 수 있습니다.")
 
-            print(f"\n[3/3] 🤖 AI 스크립트 작성 (Model: {self.model_name}, Mode: {'Curator' if self.curator_mode else 'Standard'})")
-            data = analyze_script_first(vid, self.url, transcript, model_name=self.model_name, ignore_cache=self.ignore_cache, multimodal_mode=self.multimodal_mode, curator_mode=self.curator_mode)
+            print(f"\n[3/3] 🤖 AI 스크립트 작성 (Model: {self.model_name}, Mode: {'Multimodal' if self.multimodal_mode else 'Transcript-only'})...")
+            data = analyze_script_first(vid, self.url, transcript, model_name=self.model_name, ignore_cache=self.ignore_cache, multimodal_mode=self.multimodal_mode)
 
             print("\n✅ 분석 완료! 아래 에디터에서 대본과 컷 시간을 수정한 후 [최종 쇼츠 생성]을 눌러주세요.")
             self.finished.emit(data, vid, video_path)
@@ -423,11 +422,6 @@ class SettingsDialog(QDialog):
 
         self.ignore_cache_cb = QCheckBox("캐시 무시 (재분석 강제)")
         ana_form.addRow("", self.ignore_cache_cb)
-
-        self.curator_mode_cb = QCheckBox("큐레이션 모드 (분석적 해설 & 수익화 최적화)")
-        self.curator_mode_cb.setChecked(True)
-        self.curator_mode_cb.setToolTip("단순 요약을 넘어 큐레이터의 분석과 독창적 시각 효과를 적용합니다 (재사용 콘텐츠 방지)")
-        ana_form.addRow("", self.curator_mode_cb)
 
         self.multimodal_cb = QCheckBox("멀티모달 모드 (영상 직접 분석)")
         self.multimodal_cb.setToolTip("자막뿐 아니라 영상 화면의 시각적 요소를 직접 AI가 분석합니다 (마술, 스포츠 등)")
@@ -787,8 +781,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
             voice=self.voice_combo.currentData(),
             model_name=self.model_combo.currentText(),
             ignore_cache=self.ignore_cache_cb.isChecked(),
-            multimodal_mode=self.multimodal_cb.isChecked(),
-            curator_mode=self.curator_mode_cb.isChecked()
+            multimodal_mode=self.multimodal_cb.isChecked()
         )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
