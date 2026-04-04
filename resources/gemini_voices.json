@@ -1,0 +1,332 @@
+[
+    {
+        "name": "achernar",
+        "gender": "Female",
+        "tone": "Soft",
+        "description_ko": "부드럽고 차분한 여성 목소리. 명상, 부드러운 안내, 감성 나레이션용",
+        "recommended_for": [
+            "Meditation",
+            "Soft Narration",
+            "Emotional"
+        ]
+    },
+    {
+        "name": "achird",
+        "gender": "Male",
+        "tone": "Friendly",
+        "description_ko": "친근하고 따뜻한 남성 목소리. 일상 대화, 고객 응대, 제품 시연용",
+        "recommended_for": [
+            "Daily Conversation",
+            "Customer Service",
+            "Demo"
+        ]
+    },
+    {
+        "name": "algenib",
+        "gender": "Male",
+        "tone": "Gravelly",
+        "description_ko": "무게감 있고 허스키한 남성 목소리. 권위 있는 나레이션, 중년 캐릭터용",
+        "recommended_for": [
+            "Documentary",
+            "Authority",
+            "Mature Character"
+        ]
+    },
+    {
+        "name": "algieba",
+        "gender": "Male",
+        "tone": "Smooth",
+        "description_ko": "매끄럽고 깔끔한 남성 목소리. 오디오북, 전문 강연, 세련된 안내용",
+        "recommended_for": [
+            "Audiobook",
+            "Lecture",
+            "Guide"
+        ]
+    },
+    {
+        "name": "alnilam",
+        "gender": "Male",
+        "tone": "Firm",
+        "description_ko": "단호하고 신뢰감 있는 남성 목소리. 뉴스, 지식 전달, 공식 브리핑용",
+        "recommended_for": [
+            "News",
+            "Education",
+            "Bridge"
+        ]
+    },
+    {
+        "name": "aoede",
+        "gender": "Female",
+        "tone": "Breezy",
+        "description_ko": "활기차고 시원한 여성 목소리. 여행, 라이프스타일, 트렌디한 영상용",
+        "recommended_for": [
+            "Travel",
+            "Lifestyle",
+            "Vlog"
+        ]
+    },
+    {
+        "name": "autonoe",
+        "gender": "Female",
+        "tone": "Bright",
+        "description_ko": "밝고 명랑한 여성 목소리. 앱 안내, 비서/도우미, 긍정적인 메시지용",
+        "recommended_for": [
+            "Bright",
+            "Assistant",
+            "Positive"
+        ]
+    },
+    {
+        "name": "callirrhoe",
+        "gender": "Female",
+        "tone": "Easy-going",
+        "description_ko": "편안하고 자연스러운 여성 목소리. 일상적인 이야기, 친근한 나레이션용",
+        "recommended_for": [
+            "Storytelling",
+            "Nature",
+            "Casual"
+        ]
+    },
+    {
+        "name": "charon",
+        "gender": "Male",
+        "tone": "Informative",
+        "description_ko": "차분하게 정보를 전달하는 남성 목소리. 뉴스 브리핑, 전문 리포트용",
+        "recommended_for": [
+            "News",
+            "Report",
+            "Informative"
+        ]
+    },
+    {
+        "name": "despina",
+        "gender": "Female",
+        "tone": "Smooth",
+        "description_ko": "선명하고 세련된 여성 목소리. 홍보 영상, 광고, 전문 나레이션용",
+        "recommended_for": [
+            "Promotion",
+            "Ad",
+            "Professional"
+        ]
+    },
+    {
+        "name": "enceladus",
+        "gender": "Male",
+        "tone": "Breathy",
+        "description_ko": "속삭이는 듯 감성적인 남성 목소리. 시 낭독, 아주 친밀한 나레이션용",
+        "recommended_for": [
+            "Poetry",
+            "Intimate",
+            "Emotional"
+        ]
+    },
+    {
+        "name": "erinome",
+        "gender": "Female",
+        "tone": "Clear",
+        "description_ko": "정확하고 명료한 여성 목소리. 학습 가이드, 튜토리얼, 정보 전달용",
+        "recommended_for": [
+            "Education",
+            "Tutorial",
+            "Clear"
+        ]
+    },
+    {
+        "name": "fenrir",
+        "gender": "Male",
+        "tone": "Excitable",
+        "description_ko": "에너지 넘치고 열정적인 남성 목소리. 스포츠 해설, 게임 리액션, 예능용",
+        "recommended_for": [
+            "Sports",
+            "Game",
+            "Variety"
+        ]
+    },
+    {
+        "name": "gacrux",
+        "gender": "Female",
+        "tone": "Mature",
+        "description_ko": "성숙하고 지혜로운 여성 목소리. 격식 있는 진행, 다큐멘터리 해설용",
+        "recommended_for": [
+            "Documentary",
+            "Formal",
+            "Wisdom"
+        ]
+    },
+    {
+        "name": "iapetus",
+        "gender": "Male",
+        "tone": "Clear",
+        "description_ko": "명확하고 전문적인 남성 목소리. 기술 설명, 메뉴얼 안내, 교육 콘텐츠용",
+        "recommended_for": [
+            "Tech",
+            "Manual",
+            "Expert"
+        ]
+    },
+    {
+        "name": "kore",
+        "gender": "Female",
+        "tone": "Firm",
+        "description_ko": "강직하고 단호한 여성 목소리. 공고문, 뉴스 보도, 신뢰감 있는 나레이션용",
+        "recommended_for": [
+            "Notice",
+            "News",
+            "Firm"
+        ]
+    },
+    {
+        "name": "laomedeia",
+        "gender": "Female",
+        "tone": "Upbeat",
+        "description_ko": "경쾌하고 활달한 여성 목소리. 쇼핑 광고, 신나는 가이드, 프로모션용",
+        "recommended_for": [
+            "Shopping",
+            "Promotion",
+            "Upbeat"
+        ]
+    },
+    {
+        "name": "leda",
+        "gender": "Female",
+        "tone": "Youthful",
+        "description_ko": "어리고 젊은 여성 목소리. 어린이 영상, 청소년 타겟, 밝은 캐릭터 연기용",
+        "recommended_for": [
+            "Children",
+            "Youth",
+            "Character"
+        ]
+    },
+    {
+        "name": "orus",
+        "gender": "Male",
+        "tone": "Firm",
+        "description_ko": "신뢰감 있는 단호한 남성 목소리. 시사 브리핑, 전문 해설, 뉴스용",
+        "recommended_for": [
+            "News",
+            "Explanation",
+            "Briefing"
+        ]
+    },
+    {
+        "name": "puck",
+        "gender": "Male",
+        "tone": "Upbeat",
+        "description_ko": "재치 있고 경쾌한 남성 목소리. 밈(Meme), 팁 공유, 유머 컨텐츠용",
+        "recommended_for": [
+            "Meme",
+            "Tips",
+            "Comedy"
+        ]
+    },
+    {
+        "name": "pulcherrima",
+        "gender": "Female",
+        "tone": "Forward",
+        "description_ko": "의욕적이고 호소력 있는 여성 목소리. 광고 나레이션, 감정적인 연기용",
+        "recommended_for": [
+            "Ad",
+            "Acting",
+            "Passionate"
+        ]
+    },
+    {
+        "name": "rasalgethi",
+        "gender": "Male",
+        "tone": "Informative",
+        "description_ko": "논리적이고 명쾌한 남성 목소리. 데이터 분석, 지식 공유, 정보 전달용",
+        "recommended_for": [
+            "Knowledge",
+            "Analyze",
+            "Data"
+        ]
+    },
+    {
+        "name": "sadachbia",
+        "gender": "Male",
+        "tone": "Lively",
+        "description_ko": "생동감 넘치는 남성 목소리. 현장 중계, 활기찬 안내, 이벤트 소개용",
+        "recommended_for": [
+            "Event",
+            "Live",
+            "Lively"
+        ]
+    },
+    {
+        "name": "sadaltager",
+        "gender": "Male",
+        "tone": "Knowledgeable",
+        "description_ko": "지적인 깊이가 느껴지는 남성 목소리. 역사, 철학, 전문 강연용",
+        "recommended_for": [
+            "History",
+            "Philosophy",
+            "Deep"
+        ]
+    },
+    {
+        "name": "schedar",
+        "gender": "Male",
+        "tone": "Even",
+        "description_ko": "차분하고 일관된 남성 목소리. 보고서 낭독, 안정적인 나레이션용",
+        "recommended_for": [
+            "Report",
+            "Narration",
+            "Stable"
+        ]
+    },
+    {
+        "name": "sulafat",
+        "gender": "Female",
+        "tone": "Warm",
+        "description_ko": "따뜻하고 자애로운 여성 목소리. 상담, 육아 가이드, 힐링 콘텐츠용",
+        "recommended_for": [
+            "Healing",
+            "Baby",
+            "Couseling"
+        ]
+    },
+    {
+        "name": "umbriel",
+        "gender": "Male",
+        "tone": "Easy-going",
+        "description_ko": "느긋하고 편안한 남성 목소리. 라이프 스타일, 휴식, 자연스러운 대화용",
+        "recommended_for": [
+            "Relax",
+            "Vlog",
+            "Conversation"
+        ]
+    },
+    {
+        "name": "vindemiatrix",
+        "gender": "Female",
+        "tone": "Gentle",
+        "description_ko": "온화하고 부드러운 여성 목소리. 요가, 명상 가이드, 차분한 독백용",
+        "recommended_for": [
+            "Yoga",
+            "Meditation",
+            "Gentle"
+        ]
+    },
+    {
+        "name": "zephyr",
+        "gender": "Female",
+        "tone": "Bright",
+        "description_ko": "상쾌하고 기분 좋은 여성 목소리. 맑은 느낌의 안내, 긍정적인 메시지용",
+        "recommended_for": [
+            "Bright",
+            "Fresh",
+            "Message"
+        ]
+    },
+    {
+        "name": "zubenelgenubi",
+        "gender": "Male",
+        "tone": "Casual",
+        "description_ko": "격식 없고 소탈한 남성 목소리. 브이로그, 친구 같은 나레이션용",
+        "recommended_for": [
+            "Casual",
+            "Vlog",
+            "Friend"
+        ]
+    }
+]

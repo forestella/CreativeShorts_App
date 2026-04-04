@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# Project Specific
+.env
+.env.bak
+cache/
+output/
+downloads/
+temp-audio.m4a
+full_narration_whisper.mp3
+concat_tts.txt
+edit_script.json
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Large files
+*.mp4
+*.mkv
+*.mp3
+*.wav
+*.vtt

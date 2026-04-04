@@ -1,0 +1,13 @@
+PyQt6
+pyyaml
+google-genai
+yt-dlp
+openai-whisper
+moviepy
+librosa
+pydub
+gTTS
+Pillow
+numpy
+imageio-ffmpeg
+soundfile
