@@ -145,7 +145,7 @@ SFX_MAP = {
     
     # [코믹/재치]
     "funny":      "9. 뜨헉.mp3",
-    "what":       "53. 먼개소리야.mp3",
+    "what":       "15. 어엉.mp3",
     "laugh":      "55. 어이없는웃음.mp3",
     "evil":       "52. 사악한웃음.mp3",
     "duck":       "2. 러버덕.mp3",
@@ -158,7 +158,7 @@ SFX_MAP = {
     "poop":       "12. 뿌직.mp3",
     
     # [분위기]
-    "sad":        "37. 슬픈음악.mp3",
+    "sad":        "61. 히잉.mp3",
     "urgent":     "44. 다급한브금.mp3",
     "scary":      "43. 놀라는배경음.mp3",
     "rewind":     "20. 되감기.mp3",
@@ -187,14 +187,17 @@ def ensure_downloaded(url):
     # 로컬 파일 경로인 경우 바로 반환
     if os.path.exists(url) and (url.endswith(".mp4") or url.endswith(".mkv")):
         vid = os.path.splitext(os.path.basename(url))[0]
-        vtt_path = os.path.join(os.path.dirname(url), f"{vid}.en.vtt")
-        if not os.path.exists(vtt_path):
-            # vtt가 없으면 검색 시도 (같은 폴더 내 .vtt)
-            vtt_search = list(Path(os.path.dirname(url)).glob(f"{vid}*.vtt"))
-            if vtt_search:
-                vtt_path = str(vtt_search[0])
-            else:
-                vtt_path = "" # 자막 없음 표시
+        folder = os.path.dirname(url)
+        # ko 자막 우선, 없으면 en, 없으면 glob으로 검색
+        vtt_path = ""
+        for lang in ('ko', 'en'):
+            p = os.path.join(folder, f"{vid}.{lang}.vtt")
+            if os.path.exists(p):
+                vtt_path = p
+                break
+        if not vtt_path:
+            vtt_search = list(Path(folder).glob(f"{vid}*.vtt"))
+            vtt_path = str(vtt_search[0]) if vtt_search else ""
         print(f"   📂 로컬 영상 사용: {url}")
         return vid, url, vtt_path
 
@@ -210,11 +213,20 @@ def ensure_downloaded(url):
     import imageio_ffmpeg
     
     video_path = os.path.join(DOWNLOADS_DIR, f"{vid}.mp4")
-    vtt_path   = os.path.join(DOWNLOADS_DIR, f"{vid}.en.vtt") # 기존 코드와의 호환성을 위해 en 유지
-    
+
+    def _best_vtt(vid):
+        """ko 자막 우선, 없으면 en, 없으면 빈 문자열."""
+        for lang in ('ko', 'en'):
+            p = os.path.join(DOWNLOADS_DIR, f"{vid}.{lang}.vtt")
+            if os.path.exists(p):
+                return p
+        return os.path.join(DOWNLOADS_DIR, f"{vid}.ko.vtt")  # 다운로드 대상 기본값
+
     if os.path.exists(video_path):
         print(f"   이미 다운로드됨: {os.path.basename(video_path)}")
-        return vid, video_path, vtt_path
+        return vid, video_path, _best_vtt(vid)
+
+    vtt_path = _best_vtt(vid)  # 다운로드 후 반환용
 
     # IP 차단 방지를 위한 랜덤 지연 (사용자 규칙 준수)
     print(f"   📥 유튜브 다운로드 시작: {url} (IP 차단 방지 대기 중...)")
@@ -234,7 +246,7 @@ def ensure_downloaded(url):
         'nocheckcertificate': True,
         'writesubtitles': True,
         'writeautomaticsub': True,
-        'subtitleslangs': ['en'], # 이 프로젝트는 영어 자동 자막(en)을 AI 용으로 사용
+        'subtitleslangs': ['ko', 'en'],  # 한국어 우선, 없으면 영어
         'skip_video': False,
     }
 
@@ -261,7 +273,7 @@ def ensure_downloaded(url):
             raise RuntimeError(f"영상 다운로드 완료되었으나 파일을 찾을 수 없습니다: {video_path}")
 
     print(f"   ✓ {os.path.basename(video_path)}")
-    return vid, video_path, vtt_path
+    return vid, video_path, _best_vtt(vid)
 
 
 # ─── STEP 2: VTT 파싱 ────────────────────────────────────────────────────────
@@ -288,7 +300,8 @@ def parse_vtt(path):
 
 # ─── STEP 3: AI 스크립트 + 타임스탬프 매핑 ───────────────────────────────────
 
-def analyze_script_first(video_id, video_url, transcript, model_name="gemini-2.5-flash-lite", ignore_cache=False, multimodal_mode=False):
+def analyze_script_first(video_id, video_url, transcript, model_name="gemini-2.5-flash-lite", ignore_cache=False, multimodal_mode=False,
+                         article_text="", intercept_mode=False, sync_targets="", tone=""):
     """
     영상 트랜스크립트를 분석하여 60초 이내의 숏폼 대본과 타임스탬프를 매핑합니다.
     (STRICT 60s LIMIT, NO WHATSAPP)
@@ -413,10 +426,47 @@ Pick ONLY the most viral and important highlights from the transcript.
 DO NOT try to include everything. Create a tight, engaging 60-second story.
 Ensure you Scan the transcript to find the best visual matches for your script."""
 
+    # ─── 인터뷰 인터셉트 모드 추가 블록 ───────────────────────────────────────
+    intercept_block = ""
+    if intercept_mode:
+        tone_str = f"톤앤매너: {tone}" if tone else ""
+        sync_str = f"\n핵심 싱크 지정:\n{sync_targets}" if sync_targets else ""
+        intercept_block = f"""
+━━━ [INTERCEPT MODE: 인터뷰 인터셉트 구조] ━━━
+당신은 이제 '쇼츠 전문 작가'입니다. 아래 규칙을 반드시 따르세요.
+
+1. 티키타카 구조: TTS(질문/리액션) → 영상 현장음 싱크(대답) 형태로 교차 편집합니다.
+   - clip_type = "TTS"  : TTS 나레이션이 말하는 클립 (원본 오디오 완전 소거)
+   - clip_type = "SYNC" : 영상 속 인물의 실제 대사가 터지는 클립 (원본 오디오 살림, TTS 없음)
+
+2. TTS 클립: 시청자의 궁금증을 대변하거나, 영상 속 인물에게 장난 거는 리액션 위주.
+   tts_kr에 TTS가 말할 대본, script_kr에 자막 텍스트를 씁니다.
+
+3. SYNC 클립: 영상에서 실제로 나오는 핵심 대사 타임스탬프를 정확히 지정합니다.
+   tts_kr = "" (빈 문자열, TTS 생성 안 함).
+   ★★ script_kr RULE (CRITICAL): 반드시 트랜스크립트에서 해당 타임스탬프에 실제로 적힌 텍스트만 사용하세요.
+      - AI가 번역·의역·창작하는 것 절대 금지. 트랜스크립트에 없는 문장은 쓰지 마세요.
+      - 트랜스크립트가 영어라면 그 영어 원문을 그대로 넣으세요 (번역 금지).
+      - 트랜스크립트가 한국어라면 해당 구간의 원문을 그대로 넣으세요.
+   start_time / end_time은 해당 대사가 실제로 나오는 소스 영상 초 단위.
+
+4. 오디오 동선: TTS 클립은 현장음 OFF, SYNC 클립은 현장음 ON.
+
+{tone_str}{sync_str}
+"""
+
+    article_block = ""
+    if article_text:
+        article_block = f"""
+[관련 기사 (대본 보강 참고자료)]
+{article_text[:2000]}
+"""
+
     user_prompt = f"""
 [VIDEO CONTEXT]
 {meta_block}
-
+{article_block}
+{intercept_block}
 {transcript_section}
 {analyze_instruction}
 """
@@ -427,15 +477,16 @@ Ensure you Scan the transcript to find the best visual matches for your script."
         properties={
             "order":     types.Schema(type=types.Type.INTEGER),
             "role":      types.Schema(type=types.Type.STRING),
+            "clip_type": types.Schema(type=types.Type.STRING), # "TTS" or "SYNC"
             "script_kr": types.Schema(type=types.Type.STRING), # For Subtitles (Numbers OK)
-            "tts_kr":    types.Schema(type=types.Type.STRING), # For TTS (Hangeul Only)
+            "tts_kr":    types.Schema(type=types.Type.STRING), # For TTS (Hangeul Only) — "" for SYNC clips
             "sfx":       types.Schema(type=types.Type.STRING),
             "start_time":types.Schema(type=types.Type.NUMBER),
             "end_time":  types.Schema(type=types.Type.NUMBER),
             "duration":  types.Schema(type=types.Type.NUMBER),
             "note":      types.Schema(type=types.Type.STRING),
         },
-        required=["order","role","script_kr","tts_kr","start_time","end_time","duration"],
+        required=["order","role","clip_type","script_kr","tts_kr","start_time","end_time","duration"],
     )
     response_schema = types.Schema(
         type=types.Type.OBJECT,
@@ -659,16 +710,21 @@ def generate_single_tts(clips, video_id, voice="Charon"):
     
     valid_clips = []
     for c in clips:
+        # SYNC 클립은 현장음을 그대로 살려야 하므로 TTS 생성 대상에서 제외
+        if c.get('clip_type', 'TTS').upper() == 'SYNC':
+            valid_clips.append((c, None))
+            continue
         # TTS 생성 시에는 한글 발음용 tts_kr 필드 사용 (없으면 script_kr fallback)
         script = c.get('tts_kr') or c.get('script_kr', '')
         script = script.replace('\\n', ' ').strip()
         if script:
             valid_clips.append((c, script))
             
-    if not valid_clips:
+    tts_only_clips = [(c, s) for c, s in valid_clips if s is not None]
+    if not tts_only_clips:
         return [{**c, 'tts_path': None, 'tts_duration': c['duration'], 'tts_end': 0.0} for c in clips]
-        
-    full_text = " ".join([script for _, script in valid_clips])
+
+    full_text = " ".join([script for _, script in tts_only_clips])
     full_tts_path = os.path.join(tts_dir, "full_narration_whisper.mp3")
     
     print(f"   🔊 통합 TTS 음성 생성 중... (voice: {voice})")
@@ -702,6 +758,12 @@ def generate_single_tts(clips, video_id, voice="Charon"):
     full_audio = AudioSegment.from_file(full_tts_path)
 
     for i, c in enumerate(clips):
+        # SYNC 클립: TTS 없이 현장음 그대로 사용
+        if c.get('clip_type', 'TTS').upper() == 'SYNC':
+            prev_end = result[-1]['tts_end'] if result else 0.0
+            result.append({**c, 'tts_path': None, 'tts_duration': c['duration'], 'tts_end': prev_end})
+            continue
+
         clip_script = c.get('script_kr', '').replace('\\n', ' ').strip()
         if not clip_script:
             prev_end = result[-1]['tts_end'] if result else 0.0
@@ -724,8 +786,8 @@ def generate_single_tts(clips, video_id, voice="Charon"):
         clip_start_t = result[-1]['tts_end'] if result else 0.0
         clip_end_t = merged_segs[-1]['end'] if merged_segs else (clip_start_t + c['duration'])
         
-        # 마지막 클립 안전 보정
-        if c['order'] == valid_clips[-1][0]['order']:
+        # 마지막 TTS 클립 안전 보정
+        if c['order'] == tts_only_clips[-1][0]['order']:
             clip_end_t = len(full_audio) / 1000.0
 
         # ---- SRT 생성 로직 (Whisper 세그먼트 단위로 무결점 원본 대본 비율 분할) ----

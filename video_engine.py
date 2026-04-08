@@ -592,7 +592,8 @@ class VideoProcessor:
                     # 확대/축소 및 볼륨 설정
                     ns["clip"]["scale"] = {"x": 1.5, "y": 1.5} # 1.5배 확대
                     ns["uniform_scale"]["value"] = 1.0
-                    ns["volume"] = 0.0 # 원본 영상 소리는 유튜브 쇼츠에서 나레이션 방해를 막기 위해 완전 음소거 처리
+                    # SYNC 클립: 현장음 살림 / TTS 클립: 원본 소리 완전 소거 (나레이션 방해 방지)
+                    ns["volume"] = 1.0 if seg.get('clip_type', 'TTS').upper() == 'SYNC' else 0.0
                     ns["enable_adjust"] = True
                     
                     new_segments.append(ns)

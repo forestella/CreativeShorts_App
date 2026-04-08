@@ -57,13 +57,18 @@ class AnalysisWorker(QObject):
     finished = pyqtSignal(dict, str, str) # data, vid, video_path
     error = pyqtSignal(str)
 
-    def __init__(self, url, voice, model_name, ignore_cache, multimodal_mode=False):
+    def __init__(self, url, voice, model_name, ignore_cache, multimodal_mode=False,
+                 article_text="", intercept_mode=False, sync_targets="", tone=""):
         super().__init__()
         self.url = url
         self.voice = voice
         self.model_name = model_name
         self.ignore_cache = ignore_cache
         self.multimodal_mode = multimodal_mode
+        self.article_text = article_text
+        self.intercept_mode = intercept_mode
+        self.sync_targets = sync_targets
+        self.tone = tone
 
     def run(self):
         try:
@@ -84,7 +89,8 @@ class AnalysisWorker(QObject):
                     print("   ❌ 사용할 수 있는 영어(.en.vtt) 자막이 없습니다. 자동 분석이 어려울 수 있습니다.")
 
             print(f"\n[3/3] 🤖 AI 스크립트 작성 (Model: {self.model_name}, Mode: {'Multimodal' if self.multimodal_mode else 'Transcript-only'})...")
-            data = analyze_script_first(vid, self.url, transcript, model_name=self.model_name, ignore_cache=self.ignore_cache, multimodal_mode=self.multimodal_mode)
+            data = analyze_script_first(vid, self.url, transcript, model_name=self.model_name, ignore_cache=self.ignore_cache, multimodal_mode=self.multimodal_mode,
+                                        article_text=self.article_text, intercept_mode=self.intercept_mode, sync_targets=self.sync_targets, tone=self.tone)
 
             print("\n✅ 분석 완료! 아래 에디터에서 대본과 컷 시간을 수정한 후 [최종 쇼츠 생성]을 눌러주세요.")
             self.finished.emit(data, vid, video_path)
@@ -188,6 +194,7 @@ class GenerationWorker(QObject):
                     'duration':      dur,
                     'sfx_path':      sfx_file,
                     'timeline_start': cumulative_t,
+                    'clip_type':     c.get('clip_type', 'TTS'),
                 })
                 sfx_tag = f"  🔊{c['sfx']}" if c.get('sfx') and sfx_file else ""
                 print(f"   ✓ #{c['order']:02d} [{c['role']}] {c['start_time']:.1f}s → {c['start_time']+dur:.1f}s  ({dur:.2f}s){sfx_tag}")
@@ -722,6 +729,54 @@ class PyQtCreativeShortsGUI(QMainWindow):
         url_layout.addWidget(self.btn_settings)
         main_layout.addLayout(url_layout)
 
+        # ── 인터뷰 인터셉트 모드 ──
+        from PyQt6.QtWidgets import QFrame
+        intercept_group = QGroupBox("🎤 인터뷰 인터셉트 모드 (TTS ↔ 현장 싱크 티키타카)")
+        intercept_group.setCheckable(True)
+        intercept_group.setChecked(False)
+        intercept_layout = QVBoxLayout(intercept_group)
+        intercept_layout.setSpacing(6)
+
+        # 톤앤매너 + 싱크 지정 (가로 배치)
+        tone_row = QHBoxLayout()
+        tone_row.addWidget(QLabel("톤앤매너:"))
+        self.tone_combo = QComboBox()
+        self.tone_combo.addItems([
+            "자극적이고 빠른 전개",
+            "충격적인 반전 강조",
+            "유머/킹받는 말투",
+            "진지하고 묵직한 전개",
+            "공감형 따뜻한 스토리",
+        ])
+        self.tone_combo.setMinimumWidth(200)
+        tone_row.addWidget(self.tone_combo)
+        tone_row.addStretch()
+        intercept_layout.addLayout(tone_row)
+
+        # 핵심 싱크 지정
+        sync_row = QHBoxLayout()
+        sync_row.addWidget(QLabel("핵심 싱크 지정:"))
+        self.sync_targets_entry = QLineEdit()
+        self.sync_targets_entry.setPlaceholderText(
+            "예: 45초에 '절대 안 해요' → TTS가 '운동 좋아하세요?' 묻고 영상 싱크로 대답하게"
+        )
+        sync_row.addWidget(self.sync_targets_entry, 1)
+        intercept_layout.addLayout(sync_row)
+
+        # 관련 기사 입력
+        intercept_layout.addWidget(QLabel("관련 기사 (선택):"))
+        self.article_edit = QTextEdit()
+        self.article_edit.setPlaceholderText(
+            "기사 내용을 여기에 붙여넣으세요.\n"
+            "AI가 영상 트랜스크립트 + 기사를 합쳐 더 풍부한 대본을 작성합니다."
+        )
+        self.article_edit.setFixedHeight(100)
+        self.article_edit.setFont(QFont("Menlo", 11))
+        intercept_layout.addWidget(self.article_edit)
+
+        self.intercept_group = intercept_group
+        main_layout.addWidget(intercept_group)
+
         # ── 분석 버튼 ──
         self.btn_analyze = QPushButton("1. 영상 다운로드 및 AI 대본 초안 생성")
         self.btn_analyze.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; font-size: 14px; padding: 10px;")
@@ -781,7 +836,11 @@ class PyQtCreativeShortsGUI(QMainWindow):
             voice=self.voice_combo.currentData(),
             model_name=self.model_combo.currentText(),
             ignore_cache=self.ignore_cache_cb.isChecked(),
-            multimodal_mode=self.multimodal_cb.isChecked()
+            multimodal_mode=self.multimodal_cb.isChecked(),
+            article_text=self.article_edit.toPlainText().strip(),
+            intercept_mode=self.intercept_group.isChecked(),
+            sync_targets=self.sync_targets_entry.text().strip(),
+            tone=self.tone_combo.currentText(),
         )
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
