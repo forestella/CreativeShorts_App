@@ -105,7 +105,7 @@ class GenerationWorker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, data, vid, video_path, url, voice, model_name, bgm_path=None,
-                 subtitle_position="중단", use_sfx=True, channel_watermark=None):
+                 subtitle_position="중단", use_sfx=True, channel_watermark=None, zoom_factor=1.5):
         super().__init__()
         self.data = data
         self.vid = vid
@@ -117,6 +117,7 @@ class GenerationWorker(QObject):
         self.subtitle_position = subtitle_position
         self.use_sfx = use_sfx
         self.channel_watermark = channel_watermark
+        self.zoom_factor = zoom_factor
 
     def run(self):
         try:
@@ -212,7 +213,8 @@ class GenerationWorker(QObject):
                 bgm_path=bgm,
                 video_clips=None,
                 subtitle_position=self.subtitle_position,
-                channel_watermark=self.channel_watermark
+                channel_watermark=self.channel_watermark,
+                zoom_factor=self.zoom_factor
             )
 
             if project_path:
@@ -897,7 +899,8 @@ class PyQtCreativeShortsGUI(QMainWindow):
             bgm_path=self.get_selected_bgm(),
             subtitle_position=self.subtitle_pos_combo.currentText(),
             use_sfx=self.use_sfx_cb.isChecked(),
-            channel_watermark=channel_watermark
+            channel_watermark=channel_watermark,
+            zoom_factor=float(self.scale_combo.currentText())
         )
         self.gen_worker.moveToThread(self.gen_thread)
         self.gen_thread.started.connect(self.gen_worker.run)

@@ -462,7 +462,7 @@ class VideoProcessor:
             logger.error(f"쇼츠 합성 실패: {e}")
             return None
 
-    def export_to_capcut(self, video_path, segments, project_name="Autogen_Project", title=None, source=None, subtitles=None, tts_path=None, bgm_path=None, video_clips=None, subtitle_position="중단", channel_watermark=None):
+    def export_to_capcut(self, video_path, segments, project_name="Autogen_Project", title=None, source=None, subtitles=None, tts_path=None, bgm_path=None, video_clips=None, subtitle_position="중단", channel_watermark=None, zoom_factor=1.5):
         import uuid, json, shutil, copy
         from datetime import datetime
         # 1. 경로 설정 (독립형 앱 구조)
@@ -523,15 +523,15 @@ class VideoProcessor:
                         "alpha": 1.0,
                         "flip": {"horizontal": False, "vertical": False},
                         "rotation": 0.0,
-                        "scale": {"x": 1.5, "y": 1.5},
+                        "scale": {"x": zoom_factor, "y": zoom_factor},
                         "transform": {"x": 0.0, "y": 0.0}
                     }
                     ns["volume"] = 0.0  # 원본 오디오 완전 소거
                     ns["speed"] = 1.0
                     ns["reverse"] = False
                     ns["visible"] = True
-                    # uniform_scale: setdefault 대신 강제 할당 (템플릿에 이미 파일이 있어도 1.5로 덮어쓰기)
-                    ns["uniform_scale"] = {"on": True, "value": 1.5}
+                    # uniform_scale: setdefault 대신 강제 할당 (템플릿에 이미 파일이 있어도 덮어쓰기)
+                    ns["uniform_scale"] = {"on": True, "value": zoom_factor}
                     new_segments.append(ns)
                     current_t += to_us(clip_dur_s)
             else:
@@ -590,7 +590,7 @@ class VideoProcessor:
                     ns["render_timerange"] = {"duration": s_dur, "start": current_t}
                     
                     # 확대/축소 및 볼륨 설정
-                    ns["clip"]["scale"] = {"x": 1.5, "y": 1.5} # 1.5배 확대
+                    ns["clip"]["scale"] = {"x": zoom_factor, "y": zoom_factor}
                     ns["uniform_scale"]["value"] = 1.0
                     # SYNC 클립: 현장음 살림 / TTS 클립: 원본 소리 완전 소거 (나레이션 방해 방지)
                     ns["volume"] = 1.0 if seg.get('clip_type', 'TTS').upper() == 'SYNC' else 0.0
