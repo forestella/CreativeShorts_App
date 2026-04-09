@@ -858,8 +858,16 @@ class VideoProcessor:
             safe_text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             full_content = f'<speak><prosody rate="{f"{int(round(playback_speed*100))}%"}">{safe_text}</prosody></speak>' if playback_speed != 1.0 else safe_text
             # print(f"   [DEBUG] TTS Voice: {voice_name}")
+            tts_model_name = "gemini-2.5-flash-preview-tts"
             client = genai.Client(api_key=GEMINI_API_KEY)
-            response = client.models.generate_content(model="gemini-2.5-flash-preview-tts", contents=full_content, config=types.GenerateContentConfig(response_modalities=["AUDIO"], speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)))))
+            response = client.models.generate_content(model=tts_model_name, contents=full_content, config=types.GenerateContentConfig(response_modalities=["AUDIO"], speech_config=types.SpeechConfig(voice_config=types.VoiceConfig(prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)))))
+            
+            try:
+                from core_logic import _track_usage
+                _track_usage(tts_model_name, response)
+            except Exception as e:
+                pass
+                
             audio_data = b""
             if hasattr(response, "candidates") and response.candidates:
                 for part in response.candidates[0].content.parts:

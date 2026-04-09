@@ -49,50 +49,61 @@ for d in [DOWNLOADS_DIR, OUTPUT_DIR, CACHE_DIR, BGM_DIR, RESOURCE_DIR, TTS_CACHE
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ─── 비용 추적기 ─────────────────────────────────────────────────────────────
-_session_usage: dict = {"input_tokens": 0, "output_tokens": 0, "model": ""}
+_session_usage_by_model: dict = {}
 
 # 모델별 USD 단가 (per 1M tokens) — https://ai.google.dev/gemini-api/docs/pricing
 _PRICING = {
     "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
     "gemini-2.5-flash":      {"input": 0.30, "output": 2.50},
     "gemini-2.5-pro":        {"input": 1.25, "output": 10.00},
+    "gemini-2.5-flash-preview-tts": {"input": 0.50, "output": 10.00},
+    "gemini-2.5-pro-preview-tts": {"input": 1.00, "output": 20.00},
 }
 
 def _track_usage(model_name: str, response) -> None:
-    """response.usage_metadata에서 토큰 수를 추출해 누적합니다."""
-    global _session_usage
+    """response.usage_metadata에서 토큰 수를 추출해 모델별로 누적합니다."""
+    global _session_usage_by_model
     meta = getattr(response, "usage_metadata", None)
     if not meta:
         return
     inp = getattr(meta, "prompt_token_count", 0) or 0
     out = getattr(meta, "candidates_token_count", 0) or 0
-    _session_usage["input_tokens"] += inp
-    _session_usage["output_tokens"] += out
-    _session_usage["model"] = model_name
+    if model_name not in _session_usage_by_model:
+        _session_usage_by_model[model_name] = {"input_tokens": 0, "output_tokens": 0}
+    _session_usage_by_model[model_name]["input_tokens"] += inp
+    _session_usage_by_model[model_name]["output_tokens"] += out
 
 def reset_cost_tracker() -> None:
-    global _session_usage
-    _session_usage = {"input_tokens": 0, "output_tokens": 0, "model": ""}
+    global _session_usage_by_model
+    _session_usage_by_model = {}
 
 def get_cost_summary() -> str:
-    inp   = _session_usage["input_tokens"]
-    out   = _session_usage["output_tokens"]
-    model = _session_usage["model"] or "gemini-2.5-flash"
-    pricing   = _PRICING.get(model, _PRICING["gemini-2.5-flash"])
-    cost_in   = inp / 1_000_000 * pricing["input"]
-    cost_out  = out / 1_000_000 * pricing["output"]
-    cost_total = cost_in + cost_out
-    KRW_RATE  = 1380
+    KRW_RATE = 1380
+    cost_total = 0.0
     lines = [
         "──────────────────────────────────────────",
-        f" 💰 [Gemini API 비용 추산]  모델: {model}",
-        "──────────────────────────────────────────",
-        f"   입력 토큰:  {inp:,} tokens  × ${pricing['input']:.2f}/M  = ${cost_in:.5f}",
-        f"   출력 토큰:  {out:,} tokens  × ${pricing['output']:.2f}/M  = ${cost_out:.5f}",
-        f"   ─────────────────────────────────────",
-        f"   합  계:     ${cost_total:.5f}  ≈  ₩{cost_total * KRW_RATE:.2f}",
+        " 💰 [Gemini API 비용 추산 내역 (종합)]",
         "──────────────────────────────────────────",
     ]
+    if not _session_usage_by_model:
+         lines.append("   - 기록된 비용 내역이 없습니다.")
+    else:
+        for model, usage in _session_usage_by_model.items():
+            inp = usage["input_tokens"]
+            out = usage["output_tokens"]
+            pricing = _PRICING.get(model, _PRICING.get("gemini-2.5-flash", {"input": 0.30, "output": 2.50}))
+            cost_in = inp / 1_000_000 * pricing["input"]
+            cost_out = out / 1_000_000 * pricing["output"]
+            model_total = cost_in + cost_out
+            cost_total += model_total
+            
+            lines.append(f"   [{model}]")
+            lines.append(f"     * 입력: {inp:,} tokens × ${pricing['input']:.2f}/M = ${cost_in:.5f}")
+            lines.append(f"     * 출력: {out:,} tokens × ${pricing['output']:.2f}/M = ${cost_out:.5f}")
+    
+    lines.append(f"   ─────────────────────────────────────")
+    lines.append(f"   총 합계:    ${cost_total:.5f}  ≈  ₩{cost_total * KRW_RATE:.2f}")
+    lines.append("──────────────────────────────────────────")
     return "\n".join(lines)
 
 

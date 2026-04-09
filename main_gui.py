@@ -863,6 +863,9 @@ class PyQtCreativeShortsGUI(QMainWindow):
 
         self.thread.quit()
         self.thread.wait()
+        
+        print("\n📈 [중간 정산] 대본 초안 생성 누적 비용:")
+        print(get_cost_summary())
 
         self.btn_analyze.setEnabled(True)
         self.btn_generate.setEnabled(True)
@@ -911,6 +914,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
     def on_generation_finished(self, project_path):
         self.gen_thread.quit()
         self.gen_thread.wait()
+        print("\n📈 [최종 정산] 전체 누적 비용 (대본 초안/메타데이터/TTS 합산):")
         print(get_cost_summary())
         self.btn_analyze.setEnabled(True)
         self.btn_generate.setEnabled(True)
