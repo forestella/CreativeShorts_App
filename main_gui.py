@@ -33,6 +33,8 @@ from core_logic import (
     BGM_DIR
 )
 from video_engine import VideoProcessor
+from src.utils.youtube_uploader import YouTubeUploader
+import glob
 
 # ─── 채널 데이터 관리 ─────────────────────────────────────────────────────────
 CHANNELS_FILE = os.path.join(APP_ROOT, "cache", "channels.json")
@@ -218,7 +220,7 @@ class GenerationWorker(QObject):
             )
 
             if project_path:
-                generate_metadata(clips, project_path, self.model_name)
+                generate_metadata(self.data, project_path, self.model_name)
 
             print("\n🎉 모든 프로세스 완료!")
             if project_path:
@@ -231,6 +233,93 @@ class GenerationWorker(QObject):
         except Exception as e:
             traceback.print_exc()
             self.error.emit(str(e))
+
+# Worker for YouTube Upload Process
+class YouTubeUploadWorker(QObject):
+    finished = pyqtSignal(str) # video_id
+    error = pyqtSignal(str)
+    progress = pyqtSignal(str)
+
+    def __init__(self, token_path, video_path, title, description, tags, privacy="public"):
+        super().__init__()
+        self.token_path = token_path
+        self.video_path = video_path
+        self.title = title
+        self.description = description
+        self.tags = tags
+        self.privacy = privacy
+
+    def run(self):
+        try:
+            print(f"\n======================================")
+            print(f"🌐 유튜브 업로드 시작")
+            print(f"======================================")
+            
+            uploader = YouTubeUploader(
+                client_secrets_file=os.path.join(APP_ROOT, "client_secrets.json"),
+                token_path=self.token_path
+            )
+            
+            print(f"📺 채널 인증: {uploader.channel_title}")
+            
+            video_id = uploader.upload_video(
+                file_path=self.video_path,
+                title=self.title,
+                description=self.description,
+                tags=self.tags,
+                privacy_status=self.privacy
+            )
+            self.finished.emit(video_id)
+        except Exception as e:
+            traceback.print_exc()
+            self.error.emit(str(e))
+
+# ─── 유튜브 메타데이터 편집 다이얼로그 ─────────────────────────────────────────
+class YouTubeMetadataEditorDialog(QDialog):
+    def __init__(self, title, description, tags, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("유튜브 업로드 메타데이터 확인")
+        self.setMinimumWidth(550)
+        self.setModal(True)
+        
+        self.result_data = None
+        
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        
+        self.title_edit = QLineEdit(title)
+        self.title_edit.setPlaceholderText("영상 제목")
+        form.addRow("제목:", self.title_edit)
+        
+        self.desc_edit = QTextEdit(description)
+        self.desc_edit.setPlaceholderText("영상 설명")
+        self.desc_edit.setFixedHeight(150)
+        form.addRow("설명:", self.desc_edit)
+        
+        self.tags_edit = QLineEdit(", ".join(tags))
+        self.tags_edit.setPlaceholderText("쉼표로 구분한 태그")
+        form.addRow("태그:", self.tags_edit)
+        
+        layout.addLayout(form)
+        
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btn_box.button(QDialogButtonBox.StandardButton.Ok).setText("업로드 시작")
+        btn_box.button(QDialogButtonBox.StandardButton.Cancel).setText("취소")
+        btn_box.accepted.connect(self.on_accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    def on_accept(self):
+        tags = [t.strip() for t in self.tags_edit.text().split(",") if t.strip()]
+        self.result_data = {
+            "title": self.title_edit.text().strip(),
+            "description": self.desc_edit.toPlainText().strip(),
+            "tags": tags
+        }
+        self.accept()
+
+    def get_data(self):
+        return self.result_data
 
 class StreamRedirector(QObject):
     text_written = pyqtSignal(str)
@@ -316,7 +405,8 @@ class ChannelManagerDialog(QDialog):
             "bgm_name": "없음 (BGM 없이)",
             "bgm": None,
             "subtitle_position": "중단",
-            "use_sfx": True
+            "use_sfx": True,
+            "youtube_token": None
         }
         self._data.setdefault("channels", []).append(ch)
         _save_channels_data(self._data)
@@ -793,10 +883,18 @@ class PyQtCreativeShortsGUI(QMainWindow):
         main_layout.addWidget(self.json_editor, 2)
 
         # ── 생성 버튼 ──
+        gen_row = QHBoxLayout()
         self.btn_generate = QPushButton("2. 최종 쇼츠 (CapCut) 생성하기")
         self.btn_generate.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; font-size: 16px; padding: 15px;")
         self.btn_generate.clicked.connect(self.start_generation)
-        main_layout.addWidget(self.btn_generate)
+        gen_row.addWidget(self.btn_generate, 2)
+
+        self.btn_upload = QPushButton("3. 유튜브 업로드 (.mov 스캔)")
+        self.btn_upload.setStyleSheet("background-color: #f44336; color: white; font-weight: bold; font-size: 16px; padding: 15px;")
+        self.btn_upload.clicked.connect(self.start_youtube_upload)
+        gen_row.addWidget(self.btn_upload, 1)
+        
+        main_layout.addLayout(gen_row)
 
         # ── 로그 ──
         main_layout.addWidget(QLabel("<b>터미널 로그</b>", font=QFont("Arial", 11)))
@@ -930,6 +1028,117 @@ class PyQtCreativeShortsGUI(QMainWindow):
 
         self.btn_analyze.setEnabled(True)
         self.btn_generate.setEnabled(True)
+
+    def start_youtube_upload(self):
+        """프로젝트 루트 또는 캡컷 내보내기 폴더의 .mov 파일을 찾아 유튜브에 업로드합니다."""
+        # 검색 경로 후보들
+        search_dirs = [APP_ROOT, "/Users/chris/Movies/CapCut"]
+        
+        # capcut_link가 가리키는 실제 경로의 부모 디렉토리도 후보에 추가
+        link_path = os.path.join(APP_ROOT, "capcut_link")
+        if os.path.islink(link_path):
+            try:
+                real_link = os.path.realpath(link_path)
+                # .../CapCut/User Data/Projects/... -> .../CapCut
+                capcut_base = os.path.dirname(os.path.dirname(os.path.dirname(real_link)))
+                if capcut_base not in search_dirs and os.path.exists(capcut_base):
+                    search_dirs.append(capcut_base)
+            except: pass
+
+        mov_files = []
+        for d in search_dirs:
+            if os.path.exists(d):
+                mov_files.extend(glob.glob(os.path.join(d, "*.mov")))
+
+        if not mov_files:
+            QMessageBox.warning(self, "파일 없음", "프로젝트 폴더 또는 캡컷 폴더에서 .mov 파일을 찾을 수 없습니다.\nCapCut에서 내보내기를 먼저 해주세요.")
+            return
+
+        # 가장 최신 파일 자동 선택
+        target_video = sorted(mov_files, key=os.path.getmtime, reverse=True)[0]
+        video_name = os.path.basename(target_video)
+        
+        # 메타데이터 연동 (JSON 파일 확인)
+        # JSON은 무조건 프로젝트 루트(APP_ROOT)에 있다고 가정 (core_logic.py에서 그렇게 생성함)
+        base_name = os.path.splitext(video_name)[0]
+        json_path = os.path.join(APP_ROOT, base_name + ".json")
+        
+        meta = {}
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+            except: pass
+        else:
+            print(f"⚠️ 매칭되는 메타데이터 JSON을 찾을 수 없습니다: {json_path}")
+
+        title = meta.get('youtube_title') or meta.get('title') or os.path.splitext(video_name)[0]
+        description = meta.get('description', title + " #shorts")
+        tags = meta.get('hashtags', ["shorts", "AI"])
+        
+        # 채널 확인
+        ch = self.get_active_channel()
+        if not ch:
+            QMessageBox.warning(self, "채널 구성요소 없음", "먼저 채널을 선택하거나 생성해주세요.")
+            return
+        
+        # 토큰 경로 결정 (tokens/ 폴더 사용)
+        token_dir = os.path.join(APP_ROOT, "tokens")
+        os.makedirs(token_dir, exist_ok=True)
+        token_file = f"youtube_token_{ch['id']}.pickle"
+        token_path = os.path.join(token_dir, token_file)
+
+        # 메타데이터 수정을 위한 다이얼로그 띄우기
+        dlg = YouTubeMetadataEditorDialog(title, description, tags, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+            
+        final_meta = dlg.get_data()
+        if not final_meta:
+            return
+
+        self.btn_analyze.setEnabled(False)
+        self.btn_generate.setEnabled(False)
+        self.btn_upload.setEnabled(False)
+
+        self.upload_thread = QThread()
+        self.upload_worker = YouTubeUploadWorker(
+            token_path=token_path,
+            video_path=target_video,
+            title=final_meta["title"],
+            description=final_meta["description"],
+            tags=final_meta["tags"]
+        )
+        self.upload_worker.moveToThread(self.upload_thread)
+        self.upload_thread.started.connect(self.upload_worker.run)
+        self.upload_worker.finished.connect(self.on_upload_finished)
+        self.upload_worker.error.connect(self.on_upload_error)
+        self.upload_thread.start()
+
+    def on_upload_finished(self, video_id):
+        self.upload_thread.quit()
+        self.upload_thread.wait()
+        
+        print(f"\n✅ 유튜브 업로드 완료! Video ID: {video_id}")
+        print(f"🔗 URL: https://youtu.be/{video_id}")
+        
+        QMessageBox.information(self, "성공", f"유튜브 업로드에 성공했습니다!\nVideo ID: {video_id}")
+        
+        self.btn_analyze.setEnabled(True)
+        self.btn_generate.setEnabled(True)
+        self.btn_upload.setEnabled(True)
+
+    def on_upload_error(self, err_msg):
+        print(f"\n❌ 업로드 중 에러 발생: {err_msg}")
+        if hasattr(self, 'upload_thread') and self.upload_thread.isRunning():
+            self.upload_thread.quit()
+            self.upload_thread.wait()
+
+        QMessageBox.critical(self, "업로드 실패", f"유튜브 업로드 중 오류가 발생했습니다:\n{err_msg}")
+        
+        self.btn_analyze.setEnabled(True)
+        self.btn_generate.setEnabled(True)
+        self.btn_upload.setEnabled(True)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

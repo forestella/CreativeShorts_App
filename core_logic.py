@@ -621,15 +621,16 @@ Ensure you Scan the transcript to find the best visual matches for your script."
 
 # ─── STEP 4: 유튜브 메타데이터 생성 ─────────────────────────────────────────
 
-def generate_metadata(clips, project_path, model_name):
+def generate_metadata(data, project_path, model_name):
     """대본을 바탕으로 유튜브 메타데이터(제목/설명/태그/고정댓글)를 생성하고 metadata.txt로 저장."""
     print(f"   📝 유튜브 메타데이터 생성 중...")
     try:
+        clips = data.get('clips', [])
         full_script = "\n".join([b.get('script_kr', '') for b in clips])
-        prompt = f"""다음 유튜브 숏폼(Shorts) 대본을 바탕으로, 업로드용 메타데이터(제목, 설명+태그, 댓글 유도)를 매력적으로 작성해줘.
+        prompt = f"""다음 유튜브 숏폼(Shorts) 대본을 바탕으로, 업로드용 메타데이터(설명+태그, 댓글 유도)를 매력적으로 작성해줘.
 
-1. 제목 (3가지 추천):
-- 시청자의 클릭을 유발하는 어그로성 제목 3가지를 추천해줌. ⚠️ 제목에 이모지 절대 금지.
+1. 제목(무시):
+- 이미 제목이 정해져 있으므로 제목은 생성하지 않아도 됨.
 
 2. 설명글 및 태그 (통합 구성):
 - ⚠️ 대본 내용을 스포일러하지 말고 시청자의 호기심을 극대화하는 1~2줄의 문장을 작성.
@@ -676,6 +677,53 @@ def generate_metadata(clips, project_path, model_name):
         print(response_text)
         print(f"──────────────────────────────────────────\n")
         print(f"   ✓ metadata.txt 저장 완료 (자동으로 문서를 엽니다)")
+        
+        # ─── 유튜브 업로드용 JSON 추가 저장 (youtube-upload-skill 연동용) ───
+        try:
+            # response_text에서 제목(3가지 중 첫 번째), 설명, 태그를 파싱하여 JSON 저장
+            # (Gemini 응답 형식이 1. 제목: ... 형태이므로 간단한 파싱 수행)
+            lines = response_text.split("\n")
+            yt_title = ""
+            yt_description = ""
+            yt_tags = []
+            
+            for line in lines:
+                line = line.strip()
+                if not yt_description and any(x in line for x in ["설명", "본문"]) and ":" in line:
+                    yt_description = line.split(":", 1)[1].strip()
+                if "#" in line:
+                    yt_tags.extend([t.strip() for t in line.split() if t.startswith("#")])
+            
+            yt_title = data.get('title') or "Shorts"
+            
+            # 출처 추가 로직
+            channel_name = data.get('channel', '').strip()
+            final_desc = yt_description or f"{yt_title} #shorts"
+            if channel_name:
+                final_desc += f"\n\n@{channel_name}"
+            
+            # JSON 파일 생성 (프로젝트 루트 및 드래프트 폴더 양쪽에 저장하여 접근성 높임)
+            yt_meta_data = {
+                "youtube_title": yt_title,
+                "description": final_desc,
+                "hashtags": list(set(yt_tags)) if yt_tags else ["shorts", "AI"]
+            }
+            
+            # 1. 드래프트 폴더 내 저장
+            json_file = os.path.join(project_path, "youtube_metadata.json")
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(yt_meta_data, f, ensure_ascii=False, indent=2)
+                
+            # 2. 프로젝트 루트에도 복사 (내보낸 .mov 파일과 이름 맞추기 위함)
+            root_json_name = os.path.basename(project_path) + ".json"
+            root_json_path = os.path.join(APP_ROOT, root_json_name)
+            with open(root_json_path, "w", encoding="utf-8") as f:
+                json.dump(yt_meta_data, f, ensure_ascii=False, indent=2)
+            
+            print(f"   ✓ 업로드용 JSON 생성 완료: {root_json_name}")
+        except Exception as je:
+            print(f"   ⚠ JSON 메타데이터 생성 중 오류: {je}")
+
         os.system(f"open '{meta_file}'")
     except Exception as e:
         print(f"   ✗ 메타데이터 분석 실패: {e}")
@@ -1025,7 +1073,7 @@ def main():
     )
     
     if project_path:
-        generate_metadata(clips, project_path, model_name)
+        generate_metadata(data, project_path, model_name)
 
     print("\n" + "═" * 64)
     print("  ✅ [BETA v3] 모든 프로세스 완료!")

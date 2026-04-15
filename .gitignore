@@ -47,3 +47,8 @@ edit_script.json
 *.mp3
 *.wav
 *.vtt
+
+tokens/
+client_secrets.json
+*.mov
+*.json
