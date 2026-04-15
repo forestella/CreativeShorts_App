@@ -676,7 +676,7 @@ def generate_metadata(data, project_path, model_name):
         print(f"──────────────────────────────────────────")
         print(response_text)
         print(f"──────────────────────────────────────────\n")
-        print(f"   ✓ metadata.txt 저장 완료 (자동으로 문서를 엽니다)")
+        print(f"   ✓ metadata.txt 저장 완료")
         
         # ─── 유튜브 업로드용 JSON 추가 저장 (youtube-upload-skill 연동용) ───
         try:
@@ -724,7 +724,6 @@ def generate_metadata(data, project_path, model_name):
         except Exception as je:
             print(f"   ⚠ JSON 메타데이터 생성 중 오류: {je}")
 
-        os.system(f"open '{meta_file}'")
     except Exception as e:
         print(f"   ✗ 메타데이터 분석 실패: {e}")
 
