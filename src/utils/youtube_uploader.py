@@ -29,13 +29,31 @@ class YouTubeUploader:
         self.token_path = token_path
         self.youtube, self.channel_title, self.channel_id = self._authenticate()
 
+    def _has_required_scopes(self, creds):
+        """토큰이 필요한 모든 스코프를 포함하는지 확인합니다."""
+        if not creds or not hasattr(creds, 'scopes') or not creds.scopes:
+            return False
+        required = set(SCOPES)
+        granted = set(creds.scopes)
+        missing = required - granted
+        if missing:
+            logger.warning(f"⚠️ 토큰에 누락된 스코프: {missing}")
+            return False
+        return True
+
     def _authenticate(self):
         creds = None
         # 기존 토큰 정보 로드
         if os.path.exists(self.token_path):
             with open(self.token_path, 'rb') as token:
                 creds = pickle.load(token)
-        
+
+        # 스코프가 부족한 경우 토큰 삭제 후 재인증
+        if creds and not self._has_required_scopes(creds):
+            logger.info(f"🔄 스코프 부족으로 토큰 재발급 필요 ({self.token_path}) - 기존 토큰 삭제 후 재인증...")
+            os.remove(self.token_path)
+            creds = None
+
         # 토큰이 없거나 만료된 경우 재인증
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
