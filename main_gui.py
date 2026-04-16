@@ -30,7 +30,8 @@ from core_logic import (
     reset_cost_tracker,
     get_cost_summary,
     TTS_CACHE_DIR,
-    BGM_DIR
+    BGM_DIR,
+    OUTPUT_DIR
 )
 from video_engine import VideoProcessor
 from src.utils.youtube_uploader import YouTubeUploader
@@ -95,6 +96,10 @@ class AnalysisWorker(QObject):
                                         article_text=self.article_text, intercept_mode=self.intercept_mode, sync_targets=self.sync_targets, tone=self.tone)
 
             print("\n✅ 분석 완료! 아래 에디터에서 대본과 컷 시간을 수정한 후 [최종 쇼츠 생성]을 눌러주세요.")
+
+            print("\n[보너스] 📝 유튜브 메타데이터 미리 생성 중...")
+            generate_metadata(data, vid, self.model_name)
+
             self.finished.emit(data, vid, video_path)
 
         except Exception as e:
@@ -219,8 +224,13 @@ class GenerationWorker(QObject):
                 zoom_factor=self.zoom_factor
             )
 
-            if project_path:
-                generate_metadata(self.data, project_path, self.model_name)
+            # 메타데이터 JSON을 CapCut 내보내기 폴더에 복사 ({project_name}.json)
+            src_meta = os.path.join(OUTPUT_DIR, f"{self.vid}.json")
+            if os.path.exists(src_meta):
+                import shutil
+                dst_meta = os.path.join("/Users/chris/Movies/CapCut", f"{project_name}.json")
+                shutil.copy2(src_meta, dst_meta)
+                print(f"   ✓ 메타데이터 JSON → {dst_meta}")
 
             print("\n🎉 모든 프로세스 완료!")
             if project_path:
@@ -240,35 +250,45 @@ class YouTubeUploadWorker(QObject):
     error = pyqtSignal(str)
     progress = pyqtSignal(str)
 
-    def __init__(self, token_path, video_path, title, description, tags, privacy="public"):
+    def __init__(self, token_path, video_path, title, description, privacy="public", category_id="22", pinned_comment=""):
         super().__init__()
         self.token_path = token_path
         self.video_path = video_path
         self.title = title
         self.description = description
-        self.tags = tags
         self.privacy = privacy
+        self.category_id = category_id
+        self.pinned_comment = pinned_comment
 
     def run(self):
         try:
             print(f"\n======================================")
             print(f"🌐 유튜브 업로드 시작")
             print(f"======================================")
-            
+
             uploader = YouTubeUploader(
                 client_secrets_file=os.path.join(APP_ROOT, "client_secrets.json"),
                 token_path=self.token_path
             )
-            
+
             print(f"📺 채널 인증: {uploader.channel_title}")
-            
+
             video_id = uploader.upload_video(
                 file_path=self.video_path,
                 title=self.title,
                 description=self.description,
-                tags=self.tags,
-                privacy_status=self.privacy
+                tags=[],
+                privacy_status=self.privacy,
+                category_id=self.category_id
             )
+
+            if self.pinned_comment:
+                try:
+                    uploader.post_comment(video_id, self.pinned_comment)
+                    print(f"💬 고정 댓글 작성 완료")
+                except Exception as e:
+                    print(f"⚠️ 댓글 작성 실패 (업로드는 성공): {e}")
+
             self.finished.emit(video_id)
         except Exception as e:
             traceback.print_exc()
@@ -276,32 +296,32 @@ class YouTubeUploadWorker(QObject):
 
 # ─── 유튜브 메타데이터 편집 다이얼로그 ─────────────────────────────────────────
 class YouTubeMetadataEditorDialog(QDialog):
-    def __init__(self, title, description, tags, parent=None):
+    def __init__(self, title, description, category_id="22", category_name="", parent=None):
         super().__init__(parent)
         self.setWindowTitle("유튜브 업로드 메타데이터 확인")
         self.setMinimumWidth(550)
         self.setModal(True)
-        
+
         self.result_data = None
-        
+
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        
+
         self.title_edit = QLineEdit(title)
         self.title_edit.setPlaceholderText("영상 제목")
         form.addRow("제목:", self.title_edit)
-        
+
         self.desc_edit = QTextEdit(description)
         self.desc_edit.setPlaceholderText("영상 설명")
         self.desc_edit.setFixedHeight(150)
         form.addRow("설명:", self.desc_edit)
-        
-        self.tags_edit = QLineEdit(", ".join(tags))
-        self.tags_edit.setPlaceholderText("쉼표로 구분한 태그")
-        form.addRow("태그:", self.tags_edit)
-        
+
+        category_label = QLabel(f"{category_name} (ID: {category_id})" if category_name else f"ID: {category_id}")
+        category_label.setStyleSheet("color: #888;")
+        form.addRow("카테고리:", category_label)
+
         layout.addLayout(form)
-        
+
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btn_box.button(QDialogButtonBox.StandardButton.Ok).setText("업로드 시작")
         btn_box.button(QDialogButtonBox.StandardButton.Cancel).setText("취소")
@@ -310,11 +330,9 @@ class YouTubeMetadataEditorDialog(QDialog):
         layout.addWidget(btn_box)
 
     def on_accept(self):
-        tags = [t.strip() for t in self.tags_edit.text().split(",") if t.strip()]
         self.result_data = {
             "title": self.title_edit.text().strip(),
             "description": self.desc_edit.toPlainText().strip(),
-            "tags": tags
         }
         self.accept()
 
@@ -333,13 +351,14 @@ class StreamRedirector(QObject):
 
 # ─── 채널 관리 다이얼로그 ──────────────────────────────────────────────────────
 class ChannelManagerDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, active_channel_id=None):
         super().__init__(parent)
         self.setWindowTitle("채널 관리")
         self.setMinimumWidth(500)
         self.setMinimumHeight(380)
         self.setModal(True)
         self._data = _load_channels_data()
+        self._active_channel_id = active_channel_id
         self._init_ui()
         self._refresh_list()
 
@@ -361,6 +380,28 @@ class ChannelManagerDialog(QDialog):
         self.watermark_edit.setPlaceholderText("예: @진리의 울림")
         form.addRow("채널명 (목록 표시용):", self.name_edit)
         form.addRow("워터마크 (영상 중앙 반투명):", self.watermark_edit)
+
+        self.category_combo = QComboBox()
+        _YT_CATEGORIES = [
+            ("22", "사람과 블로그 (People & Blogs)"),
+            ("24", "엔터테인먼트 (Entertainment)"),
+            ("23", "코미디 (Comedy)"),
+            ("27", "교육 (Education)"),
+            ("28", "과학/기술 (Science & Technology)"),
+            ("26", "하우투/스타일 (Howto & Style)"),
+            ("25", "뉴스/정치 (News & Politics)"),
+            ("17", "스포츠 (Sports)"),
+            ("20", "게임 (Gaming)"),
+            ("10", "음악 (Music)"),
+            ("1",  "영화/애니메이션 (Film & Animation)"),
+            ("15", "동물 (Pets & Animals)"),
+            ("19", "여행/이벤트 (Travel & Events)"),
+        ]
+        self._category_map = {cid: cname for cid, cname in _YT_CATEGORIES}
+        for cid, cname in _YT_CATEGORIES:
+            self.category_combo.addItem(cname, cid)
+        form.addRow("유튜브 카테고리:", self.category_combo)
+
         layout.addWidget(edit_group)
 
         # 버튼 행
@@ -384,8 +425,12 @@ class ChannelManagerDialog(QDialog):
 
     def _refresh_list(self):
         self.channel_list.clear()
-        for ch in self._data.get("channels", []):
+        active_row = 0
+        for i, ch in enumerate(self._data.get("channels", [])):
             self.channel_list.addItem(ch.get("name", "(이름없음)"))
+            if ch.get("id") == self._active_channel_id:
+                active_row = i
+        self.channel_list.setCurrentRow(active_row)
 
     def _on_select(self, row):
         channels = self._data.get("channels", [])
@@ -393,6 +438,9 @@ class ChannelManagerDialog(QDialog):
             ch = channels[row]
             self.name_edit.setText(ch.get("name", ""))
             self.watermark_edit.setText(ch.get("watermark", ""))
+            cid = ch.get("category_id", "22")
+            idx = self.category_combo.findData(cid)
+            self.category_combo.setCurrentIndex(idx if idx >= 0 else 0)
 
     def _add_channel(self):
         ch = {
@@ -406,7 +454,8 @@ class ChannelManagerDialog(QDialog):
             "bgm": None,
             "subtitle_position": "중단",
             "use_sfx": True,
-            "youtube_token": None
+            "youtube_token": None,
+            "category_id": "22"
         }
         self._data.setdefault("channels", []).append(ch)
         _save_channels_data(self._data)
@@ -419,6 +468,7 @@ class ChannelManagerDialog(QDialog):
         if 0 <= row < len(channels):
             channels[row]["name"] = self.name_edit.text().strip() or "채널"
             channels[row]["watermark"] = self.watermark_edit.text().strip()
+            channels[row]["category_id"] = self.category_combo.currentData() or "22"
             _save_channels_data(self._data)
             self._refresh_list()
             self.channel_list.setCurrentRow(row)
@@ -665,6 +715,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
                 ch["use_sfx"] = self.use_sfx_cb.isChecked()
                 ch["bgm_name"] = self.bgm_combo.currentText()
                 ch["bgm"] = self.bgm_combo.currentData()
+                # category_id는 ChannelManagerDialog에서만 수정 — 덮어쓰지 않음
                 break
         _save_channels_data(data)
 
@@ -683,7 +734,9 @@ class PyQtCreativeShortsGUI(QMainWindow):
         _save_channels_data(data)
 
     def open_channel_manager(self):
-        dlg = ChannelManagerDialog(self)
+        active_ch = self.get_active_channel()
+        active_id = active_ch["id"] if active_ch else None
+        dlg = ChannelManagerDialog(self, active_channel_id=active_id)
         dlg.exec()
         self._refresh_channel_combo()
 
@@ -1058,30 +1111,45 @@ class PyQtCreativeShortsGUI(QMainWindow):
         target_video = sorted(mov_files, key=os.path.getmtime, reverse=True)[0]
         video_name = os.path.basename(target_video)
         
-        # 메타데이터 연동 (JSON 파일 확인)
-        # JSON은 무조건 프로젝트 루트(APP_ROOT)에 있다고 가정 (core_logic.py에서 그렇게 생성함)
+        # 메타데이터 연동: APP_ROOT에서 가장 최신 {vid}.json 검색
+        # vid는 YouTube ID (11자) — mov 파일명과 무관하게 직접 찾음
+        # .mov 옆에 같은 이름의 .json 먼저 확인, 없으면 OUTPUT_DIR에서 최신 것 사용
         base_name = os.path.splitext(video_name)[0]
-        json_path = os.path.join(APP_ROOT, base_name + ".json")
-        
+        json_path = os.path.join(os.path.dirname(target_video), base_name + ".json")
+        if not os.path.exists(json_path):
+            fallbacks = sorted(glob.glob(os.path.join(OUTPUT_DIR, "*.json")), key=os.path.getmtime, reverse=True)
+            json_path = fallbacks[0] if fallbacks else None
+
         meta = {}
-        if os.path.exists(json_path):
+        if json_path and os.path.exists(json_path):
             try:
                 with open(json_path, "r", encoding="utf-8") as f:
                     meta = json.load(f)
+                print(f"📋 메타데이터 로드: {os.path.basename(json_path)}")
             except: pass
         else:
-            print(f"⚠️ 매칭되는 메타데이터 JSON을 찾을 수 없습니다: {json_path}")
+            print(f"⚠️ 메타데이터 JSON을 찾을 수 없습니다. 대본 분석을 먼저 실행해주세요.")
 
         title = meta.get('youtube_title') or meta.get('title') or os.path.splitext(video_name)[0]
         description = meta.get('description', title + " #shorts")
-        tags = meta.get('hashtags', ["shorts", "AI"])
-        
+        pinned_comment = meta.get('pinned_comment', '')
+
         # 채널 확인
         ch = self.get_active_channel()
         if not ch:
             QMessageBox.warning(self, "채널 구성요소 없음", "먼저 채널을 선택하거나 생성해주세요.")
             return
-        
+
+        category_id = ch.get("category_id", "22")
+        _YT_CATEGORY_NAMES = {
+            "1": "영화/애니메이션", "10": "음악", "15": "동물",
+            "17": "스포츠", "19": "여행/이벤트", "20": "게임",
+            "22": "사람과 블로그", "23": "코미디", "24": "엔터테인먼트",
+            "25": "뉴스/정치", "26": "하우투/스타일", "27": "교육",
+            "28": "과학/기술",
+        }
+        category_name = _YT_CATEGORY_NAMES.get(category_id, "")
+
         # 토큰 경로 결정 (tokens/ 폴더 사용)
         token_dir = os.path.join(APP_ROOT, "tokens")
         os.makedirs(token_dir, exist_ok=True)
@@ -1089,10 +1157,10 @@ class PyQtCreativeShortsGUI(QMainWindow):
         token_path = os.path.join(token_dir, token_file)
 
         # 메타데이터 수정을 위한 다이얼로그 띄우기
-        dlg = YouTubeMetadataEditorDialog(title, description, tags, self)
+        dlg = YouTubeMetadataEditorDialog(title, description, category_id=category_id, category_name=category_name, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
-            
+
         final_meta = dlg.get_data()
         if not final_meta:
             return
@@ -1107,7 +1175,8 @@ class PyQtCreativeShortsGUI(QMainWindow):
             video_path=target_video,
             title=final_meta["title"],
             description=final_meta["description"],
-            tags=final_meta["tags"]
+            category_id=category_id,
+            pinned_comment=pinned_comment
         )
         self.upload_worker.moveToThread(self.upload_thread)
         self.upload_thread.started.connect(self.upload_worker.run)

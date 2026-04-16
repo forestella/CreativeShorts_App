@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 # https://www.googleapis.com/auth/youtube.upload : 영상 업로드 권한
 SCOPES = [
     'https://www.googleapis.com/auth/youtube.upload',
-    'https://www.googleapis.com/auth/youtube.readonly'
+    'https://www.googleapis.com/auth/youtube.readonly',
+    'https://www.googleapis.com/auth/youtube.force-ssl'  # 댓글 작성에 필요
 ]
 
 class YouTubeUploader:
@@ -140,3 +141,31 @@ class YouTubeUploader:
         video_id = response.get('id')
         logger.info(f"✅ 유튜브 업로드 완료! Video ID: {video_id} (채널: {self.channel_title})")
         return video_id
+
+    def post_comment(self, video_id, comment_text):
+        """
+        영상에 고정 댓글을 작성합니다. (youtube.force-ssl scope 필요)
+
+        Args:
+            video_id (str): 댓글 달 영상 ID
+            comment_text (str): 댓글 내용
+        Returns:
+            comment_id (str): 생성된 댓글 ID
+        """
+        body = {
+            'snippet': {
+                'videoId': video_id,
+                'topLevelComment': {
+                    'snippet': {
+                        'textOriginal': comment_text
+                    }
+                }
+            }
+        }
+        response = self.youtube.commentThreads().insert(
+            part='snippet',
+            body=body
+        ).execute()
+        comment_id = response['id']
+        logger.info(f"💬 댓글 작성 완료: {comment_id}")
+        return comment_id

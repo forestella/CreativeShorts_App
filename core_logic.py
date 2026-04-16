@@ -330,7 +330,12 @@ def analyze_script_first(video_id, video_url, transcript, model_name="gemini-2.5
         ydl_opts = {'quiet': True, 'noplaylist': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
-            meta_block += f"[Channel Name]\n{info.get('uploader', '') or info.get('channel', '')}\n\n"
+            raw_handle = info.get('uploader_id', '') or ''
+            # uploader_id가 @로 시작하면 핸들, 아니면 @붙여서 사용
+            channel_handle = raw_handle if raw_handle.startswith('@') else (f"@{raw_handle}" if raw_handle else '')
+            channel_name   = info.get('uploader', '') or info.get('channel', '')
+            meta_block += f"[Channel Handle]\n{channel_handle}\n\n"
+            meta_block += f"[Channel Name]\n{channel_name}\n\n"
             meta_block += f"[Title]\n{info.get('title', '')}\n\n"
             meta_block += f"[Description]\n{info.get('description', '')[:500]}\n\n"
     except: pass
@@ -408,7 +413,7 @@ You are a Professional Short-form Director. Your expertise is in turning long vi
    - MAXIMUM 10 CLIPS TOTAL. Do not exceed this.
    - THE ENDING (FINAL CLIP): The VERY LAST CLIP must ALWAYS end with a natural subscription reminder in Korean. DO NOT MENTION the original creator's channel name or any specific channel name. Use POLITE and FRIENDLY phrases like "다음에 또 만나길 기대하겠습니다", "함께 해주셔서 감사합니다", or "더 좋은 영상으로 보답하겠습니다". Avoid commanding tones like "구독하세요!".
    - Pick ONLY the most viral and important highlights. DO NOT try to cover everything.
-   - CHANNEL NAME: Use the EXACT original channel name provided in the metadata context. DO NOT translate, localize, or change it! Follow the EXACT spelling.
+   - CHANNEL: For the "channel" field in the JSON output, use the Channel Handle (e.g. "@InTouchMinistries") if provided in the metadata context. If no handle is available, fall back to the Channel Name. DO NOT translate or modify it.
 
 3. TITLE & METADATA:
    - TITLE: MAX 15 characters. Must be extremely creative, click-baity, and hooking. ABSOLUTELY NO EMOJIS (이모지 절대 금지).
@@ -621,26 +626,50 @@ Ensure you Scan the transcript to find the best visual matches for your script."
 
 # ─── STEP 4: 유튜브 메타데이터 생성 ─────────────────────────────────────────
 
-def generate_metadata(data, project_path, model_name):
-    """대본을 바탕으로 유튜브 메타데이터(제목/설명/태그/고정댓글)를 생성하고 metadata.txt로 저장."""
+def generate_metadata(data, vid, model_name):
+    """대본을 바탕으로 유튜브 메타데이터(제목/설명/해시태그)를 생성하고 {vid}.json으로 저장."""
     print(f"   📝 유튜브 메타데이터 생성 중...")
     try:
         clips = data.get('clips', [])
         full_script = "\n".join([b.get('script_kr', '') for b in clips])
-        prompt = f"""다음 유튜브 숏폼(Shorts) 대본을 바탕으로, 업로드용 메타데이터(설명+태그, 댓글 유도)를 매력적으로 작성해줘.
+        prompt = f"""다음 유튜브 숏폼(Shorts) 대본을 바탕으로 업로드용 메타데이터를 아래 형식에 맞춰 정확히 출력해줘.
 
-1. 제목(무시):
-- 이미 제목이 정해져 있으므로 제목은 생성하지 않아도 됨.
+출력 형식 (섹션 마커를 반드시 그대로 사용):
 
-2. 설명글 및 태그 (통합 구성):
-- ⚠️ 대본 내용을 스포일러하지 말고 시청자의 호기심을 극대화하는 1~2줄의 문장을 작성.
-- 설명글 바로 뒤에 한 줄 띄우고 관련 해시태그(#숏폼 #레전드 등) 5~10개를 이어서 나열함.
-- 설명글과 태그 사이에 '태그:' 같은 구분 문구를 절대 넣지 말고, 한 번에 복사해서 유튜브 설명란에 바로 붙여넣을 수 있는 깨끗한 형태(문장+해시태그)로만 만들어줄 것.
+[제목]
+(여기에 제목만 한 줄)
 
-3. 고정 댓글 (댓글 유도):
-- 영상 내용과 자연스럽게 연결되는 질문형 댓글을 1개 작성. 시청자가 직접 답하고 싶게 만들어야 함.
-- 예시 형식: "여러분은 몇 가지나 해당되시나요? 댓글로 알려주세요!" / "이 중에서 가장 충격적인 게 뭐였나요?" 등
-- ⚠️ 이모지 1~2개만 허용. 너무 길지 않게 2줄 이내로 작성.
+[설명]
+(여기에 설명 문장만 1~2줄)
+
+[해시태그]
+(여기에 해시태그만 한 줄, 예: #숏폼 #레전드 #인생)
+
+[고정댓글]
+(여기에 댓글 한 줄)
+
+---
+
+각 섹션 작성 규칙:
+
+[제목]
+- 클릭을 유도하는 후킹 제목 (20자 이내, 한국어)
+- 궁금증·감탄·공감을 자극하는 표현 사용
+- 예: "50년간 아무도 몰랐던 인생의 비밀", "이걸 알면 당신의 선택이 달라집니다"
+- ⚠️ 이모지·특수문자·따옴표 금지
+
+[설명]
+- 대본 내용을 스포일러하지 않고 시청자 호기심을 극대화하는 1~2줄 문장
+- 자연스러운 구어체 한국어
+
+[해시태그]
+- 관련 해시태그 7~10개, 한 줄에 공백으로 구분
+- 반드시 #으로 시작, 예: #shorts #인생명언 #신앙
+
+[고정댓글]
+- 영상 내용과 자연스럽게 연결되는 질문형 댓글 1개
+- 시청자가 직접 답하고 싶게 만드는 문장
+- 이모지 1~2개 허용, 2줄 이내
 
 대본:
 {full_script}"""
@@ -667,65 +696,66 @@ def generate_metadata(data, project_path, model_name):
                 else:
                     raise
 
-        meta_file = os.path.join(project_path, "metadata.txt")
-        with open(meta_file, "w", encoding="utf-8") as f:
-            f.write(response_text)
-
         print(f"\n──────────────────────────────────────────")
-        print(f" 📌 [자동 생성된 유튜브 메타데이터 (복사/붙여넣기)]")
+        print(f" 📌 [자동 생성된 유튜브 메타데이터]")
         print(f"──────────────────────────────────────────")
         print(response_text)
         print(f"──────────────────────────────────────────\n")
-        print(f"   ✓ metadata.txt 저장 완료")
-        
-        # ─── 유튜브 업로드용 JSON 추가 저장 (youtube-upload-skill 연동용) ───
+
+        # ─── 섹션 마커 기반 파싱 ───
         try:
-            # response_text에서 제목(3가지 중 첫 번째), 설명, 태그를 파싱하여 JSON 저장
-            # (Gemini 응답 형식이 1. 제목: ... 형태이므로 간단한 파싱 수행)
-            lines = response_text.split("\n")
-            yt_title = ""
-            yt_description = ""
-            yt_tags = []
-            
-            for line in lines:
-                line = line.strip()
-                if not yt_description and any(x in line for x in ["설명", "본문"]) and ":" in line:
-                    yt_description = line.split(":", 1)[1].strip()
-                if "#" in line:
-                    yt_tags.extend([t.strip() for t in line.split() if t.startswith("#")])
-            
-            yt_title = data.get('title') or "Shorts"
-            
-            # 출처 추가 로직
-            channel_name = data.get('channel', '').strip()
-            final_desc = yt_description or f"{yt_title} #shorts"
-            if channel_name:
-                final_desc += f"\n\n@{channel_name}"
-            
-            # JSON 파일 생성 (프로젝트 루트 및 드래프트 폴더 양쪽에 저장하여 접근성 높임)
+            def _extract_section(text, marker):
+                pattern = rf"\[{marker}\]\s*\n(.*?)(?=\n\[|\Z)"
+                m = re.search(pattern, text, re.DOTALL)
+                return m.group(1).strip() if m else ""
+
+            ai_title    = _extract_section(response_text, "제목")
+            ai_desc     = _extract_section(response_text, "설명")
+            ai_hashtags = _extract_section(response_text, "해시태그")
+            ai_comment  = _extract_section(response_text, "고정댓글")
+
+            # 제목: AI 생성 우선, 없으면 분석 제목 fallback
+            yt_title = ai_title or data.get('title') or "Shorts"
+
+            # 해시태그 파싱
+            yt_tags = [t.strip() for t in ai_hashtags.split() if t.startswith("#")]
+            hashtag_line = " ".join(list(dict.fromkeys(yt_tags))) if yt_tags else "#shorts"
+
+            # 설명: 없으면 제목으로 fallback
+            desc_text = ai_desc or data.get('title') or "Shorts"
+
+            # 출처 (channel 필드가 @핸들이면 그대로, 아니면 @ 붙임)
+            channel_raw = data.get('channel', '').strip()
+            channel_mention = channel_raw if channel_raw.startswith('@') else (f"@{channel_raw}" if channel_raw else '')
+
+            # 포맷: 설명\n\n해시태그\n\n@핸들
+            final_desc = desc_text
+            if hashtag_line:
+                final_desc += f"\n\n{hashtag_line}"
+            if channel_mention:
+                final_desc += f"\n\n{channel_mention}"
+
             yt_meta_data = {
                 "youtube_title": yt_title,
                 "description": final_desc,
-                "hashtags": list(set(yt_tags)) if yt_tags else ["shorts", "AI"]
+                "hashtags": yt_tags if yt_tags else ["#shorts", "#AI"],
+                "pinned_comment": ai_comment
             }
-            
-            # 1. 드래프트 폴더 내 저장
-            json_file = os.path.join(project_path, "youtube_metadata.json")
-            with open(json_file, "w", encoding="utf-8") as f:
-                json.dump(yt_meta_data, f, ensure_ascii=False, indent=2)
-                
-            # 2. 프로젝트 루트에도 복사 (내보낸 .mov 파일과 이름 맞추기 위함)
-            root_json_name = os.path.basename(project_path) + ".json"
-            root_json_path = os.path.join(APP_ROOT, root_json_name)
-            with open(root_json_path, "w", encoding="utf-8") as f:
-                json.dump(yt_meta_data, f, ensure_ascii=False, indent=2)
-            
-            print(f"   ✓ 업로드용 JSON 생성 완료: {root_json_name}")
+
+            # output/{vid}.json 으로 저장 → 업로드 시 자동 로드
+            meta_json_path = os.path.join(OUTPUT_DIR, f"{vid}.json")
+            with open(meta_json_path, "w", encoding="utf-8") as jf:
+                json.dump(yt_meta_data, jf, ensure_ascii=False, indent=2)
+            print(f"   ✓ 메타데이터 JSON 저장: {meta_json_path}")
+            print(f"   ✓ 유튜브 메타데이터 구성 완료 (제목: {yt_title}, 출처: {channel_mention or '없음'})")
+            return yt_meta_data
         except Exception as je:
-            print(f"   ⚠ JSON 메타데이터 생성 중 오류: {je}")
+            print(f"   ⚠ 메타데이터 구성 중 오류: {je}")
+            return {}
 
     except Exception as e:
         print(f"   ✗ 메타데이터 분석 실패: {e}")
+        return {}
 
 
 # ─── STEP 5: 가이드 출력 ─────────────────────────────────────────────────────
