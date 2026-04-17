@@ -1153,7 +1153,9 @@ class PyQtCreativeShortsGUI(QMainWindow):
         # 토큰 경로 결정 (tokens/ 폴더 사용)
         token_dir = os.path.join(APP_ROOT, "tokens")
         os.makedirs(token_dir, exist_ok=True)
-        token_file = f"youtube_token_{ch['id']}.pickle"
+        import re
+        safe_name = re.sub(r'[\\/*?:"<>|]', '_', ch.get('name', ch['id'])).strip()
+        token_file = f"youtube_token_{safe_name}.pickle"
         token_path = os.path.join(token_dir, token_file)
 
         # 메타데이터 수정을 위한 다이얼로그 띄우기

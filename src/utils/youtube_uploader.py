@@ -1,6 +1,8 @@
 import os
 import pickle
 import logging
+import subprocess
+import webbrowser
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -91,10 +93,25 @@ class YouTubeUploader:
     def _get_new_creds(self):
         if not os.path.exists(self.client_secrets_file):
             raise FileNotFoundError(f"YouTube OAuth client_secrets.json 파일을 찾을 수 없습니다. (경로: {self.client_secrets_file})")
-        
+
         logger.info("🔐 YouTube OAuth 브라우저 인증 시작...")
         flow = InstalledAppFlow.from_client_secrets_file(self.client_secrets_file, SCOPES)
-        creds = flow.run_local_server(port=0)
+
+        # run_local_server가 생성한 state를 그대로 유지하면서 브라우저만 강제로 열기 위해
+        # webbrowser.open을 subprocess.Popen(['open', url])으로 임시 교체
+        original_open = webbrowser.open
+        def _force_open(url, **_):
+            logger.info("🌐 브라우저를 강제로 엽니다...")
+            subprocess.Popen(['open', url])
+            return True
+        webbrowser.open = _force_open
+
+        try:
+            creds = flow.run_local_server(port=0, open_browser=True,
+                                          authorization_prompt_message='')
+        finally:
+            webbrowser.open = original_open
+
         return creds
 
     def upload_video(self, file_path, title, description, tags=None, privacy_status='private', category_id='22'):
