@@ -15,7 +15,7 @@ sys.path.insert(0, APP_ROOT)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QTextEdit, QComboBox, QCheckBox,
                              QScrollArea, QDialog, QFormLayout, QDialogButtonBox, QGroupBox,
-                             QListWidget, QMessageBox)
+                             QListWidget, QListWidgetItem, QMessageBox)
 from PyQt6.QtCore import Qt, QObject, pyqtSignal, QThread
 from PyQt6.QtGui import QFont, QTextCursor
 
@@ -250,7 +250,7 @@ class YouTubeUploadWorker(QObject):
     error = pyqtSignal(str)
     progress = pyqtSignal(str)
 
-    def __init__(self, token_path, video_path, title, description, privacy="public", category_id="22", pinned_comment=""):
+    def __init__(self, token_path, video_path, title, description, privacy="public", category_id="22", pinned_comment="", playlist_ids=None):
         super().__init__()
         self.token_path = token_path
         self.video_path = video_path
@@ -259,6 +259,7 @@ class YouTubeUploadWorker(QObject):
         self.privacy = privacy
         self.category_id = category_id
         self.pinned_comment = pinned_comment
+        self.playlist_ids = playlist_ids or []
 
     def run(self):
         try:
@@ -289,6 +290,13 @@ class YouTubeUploadWorker(QObject):
                 except Exception as e:
                     print(f"⚠️ 댓글 작성 실패 (업로드는 성공): {e}")
 
+            for playlist_id in self.playlist_ids:
+                try:
+                    uploader.add_to_playlist(video_id, playlist_id)
+                    print(f"📋 재생목록 추가 완료: {playlist_id}")
+                except Exception as e:
+                    print(f"⚠️ 재생목록 추가 실패: {e}")
+
             self.finished.emit(video_id)
         except Exception as e:
             traceback.print_exc()
@@ -296,13 +304,14 @@ class YouTubeUploadWorker(QObject):
 
 # ─── 유튜브 메타데이터 편집 다이얼로그 ─────────────────────────────────────────
 class YouTubeMetadataEditorDialog(QDialog):
-    def __init__(self, title, description, category_id="22", category_name="", parent=None):
+    def __init__(self, title, description, category_id="22", category_name="", playlists=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("유튜브 업로드 메타데이터 확인")
         self.setMinimumWidth(550)
         self.setModal(True)
 
         self.result_data = None
+        self._playlist_items = []  # (QListWidgetItem, playlist_id) 목록
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -322,6 +331,26 @@ class YouTubeMetadataEditorDialog(QDialog):
 
         layout.addLayout(form)
 
+        # 재생목록 선택
+        playlist_label = QLabel("재생목록:")
+        layout.addWidget(playlist_label)
+
+        self.playlist_list = QListWidget()
+        self.playlist_list.setFixedHeight(120)
+        if playlists:
+            for pl in playlists:
+                item = QListWidgetItem(pl['title'])
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+                item.setCheckState(Qt.CheckState.Unchecked)
+                item.setData(Qt.ItemDataRole.UserRole, pl['id'])
+                self.playlist_list.addItem(item)
+                self._playlist_items.append(item)
+        else:
+            empty = QListWidgetItem("재생목록 없음 (인증 후 재시도)")
+            empty.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.playlist_list.addItem(empty)
+        layout.addWidget(self.playlist_list)
+
         btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         btn_box.button(QDialogButtonBox.StandardButton.Ok).setText("업로드 시작")
         btn_box.button(QDialogButtonBox.StandardButton.Cancel).setText("취소")
@@ -330,9 +359,15 @@ class YouTubeMetadataEditorDialog(QDialog):
         layout.addWidget(btn_box)
 
     def on_accept(self):
+        selected_playlists = [
+            item.data(Qt.ItemDataRole.UserRole)
+            for item in self._playlist_items
+            if item.checkState() == Qt.CheckState.Checked
+        ]
         self.result_data = {
             "title": self.title_edit.text().strip(),
             "description": self.desc_edit.toPlainText().strip(),
+            "playlist_ids": selected_playlists,
         }
         self.accept()
 
@@ -1158,8 +1193,18 @@ class PyQtCreativeShortsGUI(QMainWindow):
         token_file = f"youtube_token_{safe_name}.pickle"
         token_path = os.path.join(token_dir, token_file)
 
+        # 재생목록 미리 가져오기 (토큰이 이미 있을 때만)
+        playlists = []
+        if os.path.exists(token_path):
+            try:
+                from src.utils.youtube_uploader import YouTubeUploader as _YTU
+                _tmp = _YTU(client_secrets_file=os.path.join(APP_ROOT, "client_secrets.json"), token_path=token_path)
+                playlists = _tmp.get_playlists()
+            except Exception as e:
+                print(f"⚠️ 재생목록 로드 실패: {e}")
+
         # 메타데이터 수정을 위한 다이얼로그 띄우기
-        dlg = YouTubeMetadataEditorDialog(title, description, category_id=category_id, category_name=category_name, parent=self)
+        dlg = YouTubeMetadataEditorDialog(title, description, category_id=category_id, category_name=category_name, playlists=playlists, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -1178,7 +1223,8 @@ class PyQtCreativeShortsGUI(QMainWindow):
             title=final_meta["title"],
             description=final_meta["description"],
             category_id=category_id,
-            pinned_comment=pinned_comment
+            pinned_comment=pinned_comment,
+            playlist_ids=final_meta.get("playlist_ids", [])
         )
         self.upload_worker.moveToThread(self.upload_thread)
         self.upload_thread.started.connect(self.upload_worker.run)

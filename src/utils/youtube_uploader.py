@@ -177,6 +177,28 @@ class YouTubeUploader:
         logger.info(f"✅ 유튜브 업로드 완료! Video ID: {video_id} (채널: {self.channel_title})")
         return video_id
 
+    def get_playlists(self):
+        """채널의 재생목록 목록을 반환합니다."""
+        playlists = []
+        req = self.youtube.playlists().list(part='snippet', mine=True, maxResults=50)
+        while req:
+            resp = req.execute()
+            for item in resp.get('items', []):
+                playlists.append({'id': item['id'], 'title': item['snippet']['title']})
+            req = self.youtube.playlists().list_next(req, resp)
+        return playlists
+
+    def add_to_playlist(self, video_id, playlist_id):
+        """영상을 재생목록에 추가합니다."""
+        self.youtube.playlistItems().insert(
+            part='snippet',
+            body={'snippet': {
+                'playlistId': playlist_id,
+                'resourceId': {'kind': 'youtube#video', 'videoId': video_id}
+            }}
+        ).execute()
+        logger.info(f"📋 재생목록에 추가 완료: {playlist_id}")
+
     def post_comment(self, video_id, comment_text):
         """
         영상에 고정 댓글을 작성합니다. (youtube.force-ssl scope 필요)
