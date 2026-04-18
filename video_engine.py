@@ -678,6 +678,89 @@ class VideoProcessor:
 
             info["tracks"].extend(audio_tracks)
 
+            # ── 위아래 검정 바 (letterbox) ──────────────────────────────────────
+            # 실제 프로젝트 기준: audio → sticker(검정바) → text 순서로 쌓아야
+            # 텍스트가 검정 바 위에 렌더링됨 (CapCut: tracks 배열 뒤쪽 = 타임라인 상단 = 최상위 렌더)
+            def _make_black_bar(y_pos):
+                mat_id = str(uuid.uuid4()).upper()
+                mat = {
+                    "border_alpha": 1.0, "border_color": "#CCCCCC",
+                    "border_line_style": 0, "border_width": 4.0,
+                    "check_flag": 81, "color": "",
+                    "combo_info": {"text_templates": []},
+                    "constant_material_id": "",
+                    "custom_points": [
+                        -722.0532464984943, 167.1913170137325,
+                         722.0532464984943, 167.1913170137325,
+                         722.0532464984943, -167.1913170137325,
+                        -722.0532464984943, -167.1913170137325
+                    ],
+                    "custom_points_in":  [0.0]*8,
+                    "custom_points_out": [0.0]*8,
+                    "endpoint_left_style": 0, "endpoint_right_style": 0,
+                    "fill_render_style": {
+                        "alpha": 1.0,
+                        "color": {
+                            "gradient": {
+                                "alpha": [1.0, 1.0, 1.0], "angle": 0.0,
+                                "color": ["#CCCCCC", "#CCCCCC", "#CCCCCC"],
+                                "mode": "all",
+                                "percent": [0.0, 0.5, 1.0],
+                                "style": "linear"
+                            },
+                            "render_type": "solid",
+                            "solid": {"alpha": 1.0, "color": "#000000"},
+                            "texture": {
+                                "alpha": 1.0, "angle": 0.0, "blend": "no",
+                                "effect_id": "", "fill": "tile", "flip": [],
+                                "path": "", "range": 0, "resource_id": "",
+                                "scale": 1.0
+                            }
+                        }
+                    },
+                    "global_alpha": 1.0,
+                    "id": mat_id,
+                    "line_style": 0,
+                    "name": "rect_item",
+                    "roundness": [0.0, 0.0, 0.0, 0.0],
+                    "shadow_alpha": 0.5, "shadow_ambiguity": 0.0,
+                    "shadow_angle": 45.0, "shadow_color": "#000000",
+                    "shadow_distance": 10.0,
+                    "shape_scale": [],
+                    "shape_size": [1444.1070172307757, 334.3826489454457],
+                    "shape_type": 4,
+                    "type": "shape"
+                }
+                seg = {
+                    "id": str(uuid.uuid4()).upper(),
+                    "material_id": mat_id,
+                    "target_timerange": {"duration": current_t, "start": 0},
+                    "clip": {
+                        "alpha": 1.0,
+                        "flip": {"horizontal": False, "vertical": False},
+                        "rotation": 0.0,
+                        "scale": {"x": 1.0, "y": 1.0},
+                        "transform": {"x": 0.0, "y": y_pos}
+                    },
+                    "render_index": 14000,
+                    "reverse": False, "speed": 1.0,
+                    "visible": True, "volume": 1.0
+                }
+                track = {
+                    "id": str(uuid.uuid4()).upper(),
+                    "type": "sticker",
+                    "attribute": 0, "flag": 0,
+                    "segments": [seg]
+                }
+                return mat, track
+
+            top_mat, top_track       = _make_black_bar(+0.7393030783500814)
+            bottom_mat, bottom_track = _make_black_bar(-0.7387635707855225)
+            if "shapes" not in info["materials"]:
+                info["materials"]["shapes"] = []
+            info["materials"]["shapes"].extend([top_mat, bottom_mat])
+            info["tracks"].extend([top_track, bottom_track])
+
             # 텍스트 트랙 추가 (제목 / 출처)
             def _make_text_material(text_str, color, font_path, font_size, bold, has_shadow=True, global_alpha=1.0):
                 tid = str(uuid.uuid4()).upper()
