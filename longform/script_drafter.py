@@ -84,6 +84,8 @@ Body 패턴: {style.get('script_structure', {}).get('body_pattern', '')}
 5. narration_kr: TTS 발음을 위해 모든 숫자를 한글로 (예: "삼천 명")
 6. subtitle_kr: 자막용, 아라비아 숫자 사용 가능 (예: "3,000명")
 7. 채널 어조를 철저히 복제: {style.get('tone', '지적이고 냉소적')}
+8. CTA(마지막 씬)는 반드시 구독/좋아요/알림 설정 요청만 포함할 것.
+   웹사이트, 앱, 퀴즈, 링크, 외부 서비스 등 실존하지 않는 리소스는 절대 언급 금지.
 """
 
     print(f"   ✍️  대본 작성 중: '{topic}' ({target_duration}초 목표)...")
