@@ -655,6 +655,23 @@ class VideoProcessor:
             add_audio_track(tts_path, vol=1.0)
             add_audio_track(bgm_path, vol=0.03) # BGM 볼륨 극단적 하향 (쇼츠 나레이션 강조)
 
+            # ★ 영상 시작 띠링 효과음 삽입
+            intro_sfx_path = os.path.join(APP_ROOT, "resources", "sfx", "28. 띠링_soft.mp3")
+            if os.path.exists(intro_sfx_path):
+                import subprocess as _sp_sfx
+                intro_sfx_dur_us = 2_000_000
+                try:
+                    _r = _sp_sfx.run(
+                        ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", intro_sfx_path],
+                        capture_output=True, text=True
+                    )
+                    for _s in json.loads(_r.stdout).get("streams", []):
+                        if "duration" in _s:
+                            intro_sfx_dur_us = to_us(float(_s["duration"]))
+                            break
+                except: pass
+                add_audio_track(intro_sfx_path, vol=0.9, start_us=0, src_dur_us=intro_sfx_dur_us, fade_in_us=0, fade_out_us=200_000)
+
             # ★ SFX 트랙: beat별 효과음을 타임라인 정확한 시점에 삽입
             import subprocess as _sp2
             for seg in segments:
