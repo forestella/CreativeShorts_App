@@ -304,7 +304,7 @@ class YouTubeUploadWorker(QObject):
 
 # ─── 유튜브 메타데이터 편집 다이얼로그 ─────────────────────────────────────────
 class YouTubeMetadataEditorDialog(QDialog):
-    def __init__(self, title, description, category_id="22", category_name="", playlists=None, parent=None):
+    def __init__(self, title, description, video_path="", category_id="22", category_name="", playlists=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("유튜브 업로드 메타데이터 확인")
         self.setMinimumWidth(550)
@@ -315,6 +315,11 @@ class YouTubeMetadataEditorDialog(QDialog):
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
+
+        self.video_path_label = QLabel(video_path)
+        self.video_path_label.setStyleSheet("color: #FFD700; font-weight: bold;") # 금색으로 강조
+        self.video_path_label.setWordWrap(True)
+        form.addRow("업로드 파일:", self.video_path_label)
 
         self.title_edit = QLineEdit(title)
         self.title_edit.setPlaceholderText("영상 제목")
@@ -1204,7 +1209,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
                 print(f"⚠️ 재생목록 로드 실패: {e}")
 
         # 메타데이터 수정을 위한 다이얼로그 띄우기
-        dlg = YouTubeMetadataEditorDialog(title, description, category_id=category_id, category_name=category_name, playlists=playlists, parent=self)
+        dlg = YouTubeMetadataEditorDialog(title, description, video_path=target_video, category_id=category_id, category_name=category_name, playlists=playlists, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
