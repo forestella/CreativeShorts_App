@@ -112,7 +112,7 @@ class GenerationWorker(QObject):
     error = pyqtSignal(str)
 
     def __init__(self, data, vid, video_path, url, voice, model_name, bgm_path=None,
-                 subtitle_position="중단", use_sfx=True, channel_watermark=None, zoom_factor=1.5):
+                 subtitle_position="중단", use_sfx=True, channel_watermark=None, zoom_factor=1.5, flip_horizontal=False):
         super().__init__()
         self.data = data
         self.vid = vid
@@ -125,6 +125,7 @@ class GenerationWorker(QObject):
         self.use_sfx = use_sfx
         self.channel_watermark = channel_watermark
         self.zoom_factor = zoom_factor
+        self.flip_horizontal = flip_horizontal
 
     def run(self):
         try:
@@ -221,7 +222,8 @@ class GenerationWorker(QObject):
                 video_clips=None,
                 subtitle_position=self.subtitle_position,
                 channel_watermark=self.channel_watermark,
-                zoom_factor=self.zoom_factor
+                zoom_factor=self.zoom_factor,
+                flip_horizontal=self.flip_horizontal
             )
 
             # 메타데이터 JSON을 CapCut 내보내기 폴더에 복사 ({project_name}.json)
@@ -603,6 +605,10 @@ class SettingsDialog(QDialog):
         self.use_sfx_cb.setToolTip("설교, 강의 등 조용한 콘텐츠에서는 효과음을 끄세요")
         vid_form.addRow("효과음:", self.use_sfx_cb)
 
+        self.flip_horizontal_cb = QCheckBox("좌우 반전")
+        self.flip_horizontal_cb.setChecked(False)
+        vid_form.addRow("영상 반전:", self.flip_horizontal_cb)
+
         layout.addWidget(vid_group)
 
         # ── 분석 옵션 그룹 ──
@@ -681,6 +687,8 @@ class PyQtCreativeShortsGUI(QMainWindow):
     def ignore_cache_cb(self): return self.settings_dialog.ignore_cache_cb
     @property
     def multimodal_cb(self): return self.settings_dialog.multimodal_cb
+    @property
+    def flip_horizontal_cb(self): return self.settings_dialog.flip_horizontal_cb
 
     def get_selected_bgm(self):
         return self.settings_dialog.get_selected_bgm()
@@ -736,6 +744,8 @@ class PyQtCreativeShortsGUI(QMainWindow):
             if idx >= 0: self.subtitle_pos_combo.setCurrentIndex(idx)
         if "use_sfx" in ch:
             self.use_sfx_cb.setChecked(ch["use_sfx"])
+        if "flip_horizontal" in ch:
+            self.flip_horizontal_cb.setChecked(ch["flip_horizontal"])
         if ch.get("bgm_name"):
             idx = self.bgm_combo.findText(ch["bgm_name"])
             if idx >= 0: self.bgm_combo.setCurrentIndex(idx)
@@ -753,6 +763,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
                 ch["scale"] = self.scale_combo.currentText()
                 ch["subtitle_position"] = self.subtitle_pos_combo.currentText()
                 ch["use_sfx"] = self.use_sfx_cb.isChecked()
+                ch["flip_horizontal"] = self.flip_horizontal_cb.isChecked()
                 ch["bgm_name"] = self.bgm_combo.currentText()
                 ch["bgm"] = self.bgm_combo.currentData()
                 # category_id는 ChannelManagerDialog에서만 수정 — 덮어쓰지 않음
@@ -1094,7 +1105,8 @@ class PyQtCreativeShortsGUI(QMainWindow):
             subtitle_position=self.subtitle_pos_combo.currentText(),
             use_sfx=self.use_sfx_cb.isChecked(),
             channel_watermark=channel_watermark,
-            zoom_factor=float(self.scale_combo.currentText())
+            zoom_factor=float(self.scale_combo.currentText()),
+            flip_horizontal=self.flip_horizontal_cb.isChecked()
         )
         self.gen_worker.moveToThread(self.gen_thread)
         self.gen_thread.started.connect(self.gen_worker.run)

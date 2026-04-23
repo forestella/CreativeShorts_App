@@ -462,7 +462,7 @@ class VideoProcessor:
             logger.error(f"쇼츠 합성 실패: {e}")
             return None
 
-    def export_to_capcut(self, video_path, segments, project_name="Autogen_Project", title=None, source=None, subtitles=None, tts_path=None, bgm_path=None, video_clips=None, subtitle_position="중단", channel_watermark=None, zoom_factor=1.5):
+    def export_to_capcut(self, video_path, segments, project_name="Autogen_Project", title=None, source=None, subtitles=None, tts_path=None, bgm_path=None, video_clips=None, subtitle_position="중단", channel_watermark=None, zoom_factor=1.5, flip_horizontal=False):
         import uuid, json, shutil, copy
         from datetime import datetime
         # 1. 경로 설정 (독립형 앱 구조)
@@ -521,7 +521,7 @@ class VideoProcessor:
                     # 9:16 세로 영상 확대 (실제 CapCut JSON 구조 기반)
                     ns["clip"] = {
                         "alpha": 1.0,
-                        "flip": {"horizontal": False, "vertical": False},
+                        "flip": {"horizontal": flip_horizontal, "vertical": False},
                         "rotation": 0.0,
                         "scale": {"x": zoom_factor, "y": zoom_factor},
                         "transform": {"x": 0.0, "y": 0.0}
@@ -591,6 +591,7 @@ class VideoProcessor:
                     
                     # 확대/축소 및 볼륨 설정
                     ns["clip"]["scale"] = {"x": zoom_factor, "y": zoom_factor}
+                    ns["clip"]["flip"] = {"horizontal": flip_horizontal, "vertical": False}
                     ns["uniform_scale"]["value"] = 1.0
                     # SYNC 클립: 현장음 살림 / TTS 클립: 원본 소리 완전 소거 (나레이션 방해 방지)
                     ns["volume"] = 1.0 if seg.get('clip_type', 'TTS').upper() == 'SYNC' else 0.0
@@ -754,7 +755,7 @@ class VideoProcessor:
                     "target_timerange": {"duration": current_t, "start": 0},
                     "clip": {
                         "alpha": 1.0,
-                        "flip": {"horizontal": False, "vertical": False},
+                        "flip": {"horizontal": flip_horizontal, "vertical": False},
                         "rotation": 0.0,
                         "scale": {"x": 1.0, "y": 1.0},
                         "transform": {"x": 0.0, "y": y_pos}
