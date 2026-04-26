@@ -306,7 +306,7 @@ class YouTubeUploadWorker(QObject):
 
 # ─── 유튜브 메타데이터 편집 다이얼로그 ─────────────────────────────────────────
 class YouTubeMetadataEditorDialog(QDialog):
-    def __init__(self, title, description, video_path="", category_id="22", category_name="", playlists=None, parent=None):
+    def __init__(self, title, description, pinned_comment="", video_path="", category_id="22", category_name="", playlists=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("유튜브 업로드 메타데이터 확인")
         self.setMinimumWidth(550)
@@ -329,8 +329,13 @@ class YouTubeMetadataEditorDialog(QDialog):
 
         self.desc_edit = QTextEdit(description)
         self.desc_edit.setPlaceholderText("영상 설명")
-        self.desc_edit.setFixedHeight(150)
+        self.desc_edit.setFixedHeight(120)
         form.addRow("설명:", self.desc_edit)
+
+        self.comment_edit = QTextEdit(pinned_comment)
+        self.comment_edit.setPlaceholderText("고정 댓글 내용 (비워두면 작성 안 함)")
+        self.comment_edit.setFixedHeight(80)
+        form.addRow("고정 댓글:", self.comment_edit)
 
         category_label = QLabel(f"{category_name} (ID: {category_id})" if category_name else f"ID: {category_id}")
         category_label.setStyleSheet("color: #888;")
@@ -374,6 +379,7 @@ class YouTubeMetadataEditorDialog(QDialog):
         self.result_data = {
             "title": self.title_edit.text().strip(),
             "description": self.desc_edit.toPlainText().strip(),
+            "pinned_comment": self.comment_edit.toPlainText().strip(),
             "playlist_ids": selected_playlists,
         }
         self.accept()
@@ -1221,7 +1227,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
                 print(f"⚠️ 재생목록 로드 실패: {e}")
 
         # 메타데이터 수정을 위한 다이얼로그 띄우기
-        dlg = YouTubeMetadataEditorDialog(title, description, video_path=target_video, category_id=category_id, category_name=category_name, playlists=playlists, parent=self)
+        dlg = YouTubeMetadataEditorDialog(title, description, pinned_comment=pinned_comment, video_path=target_video, category_id=category_id, category_name=category_name, playlists=playlists, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -1240,7 +1246,7 @@ class PyQtCreativeShortsGUI(QMainWindow):
             title=final_meta["title"],
             description=final_meta["description"],
             category_id=category_id,
-            pinned_comment=pinned_comment,
+            pinned_comment=final_meta["pinned_comment"],
             playlist_ids=final_meta.get("playlist_ids", [])
         )
         self.upload_worker.moveToThread(self.upload_thread)
