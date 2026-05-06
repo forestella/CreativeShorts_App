@@ -97,9 +97,6 @@ class AnalysisWorker(QObject):
 
             print("\n✅ 분석 완료! 아래 에디터에서 대본과 컷 시간을 수정한 후 [최종 쇼츠 생성]을 눌러주세요.")
 
-            print("\n[보너스] 📝 유튜브 메타데이터 미리 생성 중...")
-            generate_metadata(data, vid, self.model_name)
-
             self.finished.emit(data, vid, video_path)
 
         except Exception as e:
@@ -226,13 +223,29 @@ class GenerationWorker(QObject):
                 flip_horizontal=self.flip_horizontal
             )
 
-            # 메타데이터 JSON을 CapCut 내보내기 폴더에 복사 ({project_name}.json)
+            # [수정] 현재 에디터의 최신 데이터를 메타데이터 JSON에 업데이트 후 복사
             src_meta = os.path.join(OUTPUT_DIR, f"{self.vid}.json")
             if os.path.exists(src_meta):
+                try:
+                    with open(src_meta, "r", encoding="utf-8") as f:
+                        meta_disk = json.load(f)
+                    
+                    # 에디터에서 수정된 title과 description을 메타데이터에 반영
+                    if 'title' in self.data:
+                        meta_disk['title'] = self.data['title']
+                        meta_disk['youtube_title'] = self.data['title'] # 일관성을 위해 함께 업데이트
+                    if 'description' in self.data:
+                        meta_disk['description'] = self.data['description']
+                    
+                    with open(src_meta, "w", encoding="utf-8") as f:
+                        json.dump(meta_disk, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print(f"   ⚠️ 메타데이터 업데이트 실패: {e}")
+
                 import shutil
                 dst_meta = os.path.join("/Users/chris/Movies/CapCut", f"{project_name}.json")
                 shutil.copy2(src_meta, dst_meta)
-                print(f"   ✓ 메타데이터 JSON → {dst_meta}")
+                print(f"   ✓ 메타데이터 JSON 업데이트 및 복사 → {dst_meta}")
 
             print("\n🎉 모든 프로세스 완료!")
             if project_path:
@@ -1187,8 +1200,18 @@ class PyQtCreativeShortsGUI(QMainWindow):
             except: pass
         else:
             print(f"⚠️ 메타데이터 JSON을 찾을 수 없습니다. 대본 분석을 먼저 실행해주세요.")
+        # [추가] 현재 에디터의 내용을 최신으로 간주하여 반영 (작업 중인 영상인 경우)
+        if self.current_vid and base_name.startswith(self.current_vid):
+            try:
+                editor_data = json.loads(self.json_editor.toPlainText().strip())
+                if 'title' in editor_data:
+                    meta['title'] = editor_data['title']
+                if 'description' in editor_data:
+                    meta['description'] = editor_data['description']
+            except: pass
 
-        title = meta.get('youtube_title') or meta.get('title') or os.path.splitext(video_name)[0]
+        # [수정] 사용자 요청에 따라 'title' 필드를 최우선으로 사용
+        title = meta.get('title') or meta.get('youtube_title') or os.path.splitext(video_name)[0]
         description = meta.get('description', title + " #shorts")
         pinned_comment = meta.get('pinned_comment', '')
 

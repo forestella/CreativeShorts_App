@@ -415,10 +415,13 @@ You are a Professional Short-form Director. Your expertise is in turning long vi
    - Pick ONLY the most viral and important highlights. DO NOT try to cover everything.
    - CHANNEL: For the "channel" field in the JSON output, use the Channel Handle (e.g. "@InTouchMinistries") if provided in the metadata context. If no handle is available, fall back to the Channel Name. DO NOT translate or modify it.
 
-3. TITLE & METADATA:
-   - TITLE: MAX 15 characters. Must be extremely creative, click-baity, and hooking. ABSOLUTELY NO EMOJIS (이모지 절대 금지).
-   - DESCRIPTION: 1-2 lines only. NO SPOILERS. Maximize curiosity.
-   - TAGS: Output only hashtags (e.g., #shorts #investing).
+3. 유튜브 제목 및 메타데이터 (전문 카피라이팅):
+   - [title]: 클릭을 유도하는 강력한 후킹 문구(공백 포함 15자 내외)를 작성하고, 그 뒤에 반드시 핵심 해시태그 3개를 붙이세요. (예: 잊지 않으신 하나님 #shorts #신앙 #위로)
+   - ⚠️ 중요: 제목에는 이모지(Emoji)나 따옴표를 절대 사용하지 마세요. (ABSOLUTELY NO EMOJIS, NO QUOTES)
+   - [youtube_titles]: 시청자의 클릭을 유도하는 강력한 후보 제목 10개 목록.
+   - [description]: 대본 내용을 스포일러하지 않고 호기심을 극대화하는 1~2줄 문장과 함께, 관련 해시태그 7~10개를 하단에 공백으로 구분하여 하나의 텍스트로 합쳐서 작성하세요.
+   - [pinned_comment]: 시청자의 참여를 유도하는 질문형 댓글.
+   - 전략: Hook(Order 1) 반영, 문제와 해결책(Conflict & Solution) 제시, 채널 성격에 맞는 톤앤매너 유지.
 
 {timestamp_rule}
 """
@@ -507,13 +510,16 @@ Ensure you Scan the transcript to find the best visual matches for your script."
     response_schema = types.Schema(
         type=types.Type.OBJECT,
         properties={
-            "title":        types.Schema(type=types.Type.STRING),
-            "channel":      types.Schema(type=types.Type.STRING),
-            "edit_concept": types.Schema(type=types.Type.STRING),
-            "clips":        types.Schema(type=types.Type.ARRAY, items=clip_schema),
-            "total_duration":types.Schema(type=types.Type.NUMBER),
+            "title":           types.Schema(type=types.Type.STRING),
+            "youtube_titles":  types.Schema(type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)),
+            "description":     types.Schema(type=types.Type.STRING),
+            "pinned_comment":  types.Schema(type=types.Type.STRING),
+            "channel":         types.Schema(type=types.Type.STRING),
+            "edit_concept":    types.Schema(type=types.Type.STRING),
+            "clips":           types.Schema(type=types.Type.ARRAY, items=clip_schema),
+            "total_duration":  types.Schema(type=types.Type.NUMBER),
         },
-        required=["title","channel","edit_concept","clips","total_duration"],
+        required=["title","channel","edit_concept","clips","total_duration","youtube_titles","description","pinned_comment"],
     )
 
     target_len = 60
@@ -621,6 +627,18 @@ Ensure you Scan the transcript to find the best visual matches for your script."
     with open(ck, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+    # [추가] 업로더용 메타데이터 JSON({vid}.json)도 즉시 생성하여 통합 처리
+    meta_json_path = os.path.join(OUTPUT_DIR, f"{video_id}.json")
+    yt_meta = {
+        "title": data.get('title'),
+        "youtube_title": data.get('title'),
+        "description": data.get('description'), # 이미 통합된 설명을 사용
+        "hashtags": [], # 별도 필드는 비워둠
+        "pinned_comment": data.get('pinned_comment')
+    }
+    with open(meta_json_path, 'w', encoding='utf-8') as f:
+        json.dump(yt_meta, f, ensure_ascii=False, indent=2)
+
     return data
 
 
@@ -632,44 +650,34 @@ def generate_metadata(data, vid, model_name):
     try:
         clips = data.get('clips', [])
         full_script = "\n".join([b.get('script_kr', '') for b in clips])
-        prompt = f"""다음 유튜브 숏폼(Shorts) 대본을 바탕으로 업로드용 메타데이터를 아래 형식에 맞춰 정확히 출력해줘.
+        prompt = f"""[역할 설정]
+너는 유튜브 쇼츠와 릴스 전문 카피라이터이자 콘텐츠 전략가야. 
+제공된 영상 스크립트와 편집 콘셉트를 분석해서 시청자의 클릭을 유도하는 강력한 제목과 메타데이터를 생성해줘.
 
 출력 형식 (섹션 마커를 반드시 그대로 사용):
 
 [제목]
-(여기에 제목만 한 줄)
+(가장 강력한 후킹 제목 하나. 공백 포함 15자 내외, 필요시 두 줄로 작성)
+
+[후보 제목 10개]
+(시청자의 궁금증, 공감, 위기감, 혹은 감동을 자극하는 강력한 후보 제목 10개 목록)
 
 [설명]
-(여기에 설명 문장만 1~2줄)
+(대본 내용을 스포일러하지 않고 시청자 호기심을 극대화하는 1~2줄 문장)
 
 [해시태그]
-(여기에 해시태그만 한 줄, 예: #숏폼 #레전드 #인생)
+(관련 해시태그 7~10개, 한 줄에 공백으로 구분)
 
 [고정댓글]
-(여기에 댓글 한 줄)
+(영상 내용과 자연스럽게 연결되는 질문형 댓글 1개)
 
 ---
 
-각 섹션 작성 규칙:
-
-[제목]
-- 클릭을 유도하는 후킹 제목 (20자 이내, 한국어)
-- 궁금증·감탄·공감을 자극하는 표현 사용
-- 예: "50년간 아무도 몰랐던 인생의 비밀", "이걸 알면 당신의 선택이 달라집니다"
-- ⚠️ 이모지·특수문자·따옴표 금지
-
-[설명]
-- 대본 내용을 스포일러하지 않고 시청자 호기심을 극대화하는 1~2줄 문장
-- 자연스러운 구어체 한국어
-
-[해시태그]
-- 관련 해시태그 7~10개, 한 줄에 공백으로 구분
-- 반드시 #으로 시작, 예: #shorts #인생명언 #신앙
-
-[고정댓글]
-- 영상 내용과 자연스럽게 연결되는 질문형 댓글 1개
-- 시청자가 직접 답하고 싶게 만드는 문장
-- 이모지 1~2개 허용, 2줄 이내
+[데이터 분석 및 작성 지침]
+1. Hook(Order 1): 영상 초반 3초에 나오는 핵심 메시지를 제목에 적극 반영할 것.
+2. Conflict & Solution: 영상에서 다루는 문제점과 그 해결책을 한 문장에 녹여내 시선을 끌 것.
+3. Tone of Voice: 채널의 성격(신앙, 과학, 역사 등)에 맞춰 어조를 조절할 것.
+4. 제한 사항: 뻔하거나 교과서적인 표현은 피하고, 15자 이내로 짧고 강렬하게 작성할 것. ⚠️이모지·따옴표 금지.
 
 대본:
 {full_script}"""
@@ -714,7 +722,7 @@ def generate_metadata(data, vid, model_name):
             ai_hashtags = _extract_section(response_text, "해시태그")
             ai_comment  = _extract_section(response_text, "고정댓글")
 
-            # 제목: AI 생성 우선, 없으면 분석 제목 fallback
+            # 제목: AI 생성 후킹 제목 우선, 없으면 분석 제목 fallback
             yt_title = ai_title or data.get('title') or "Shorts"
 
             # 해시태그 파싱
@@ -736,6 +744,7 @@ def generate_metadata(data, vid, model_name):
                 final_desc += f"\n\n{channel_mention}"
 
             yt_meta_data = {
+                "title": yt_title,
                 "youtube_title": yt_title,
                 "description": final_desc,
                 "hashtags": yt_tags if yt_tags else ["#shorts", "#AI"],

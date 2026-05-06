@@ -118,7 +118,7 @@ def main():
     
     title = args.title
     if not title and meta:
-        title = meta.get('youtube_title') or meta.get('title')
+        title = meta.get('title') or meta.get('youtube_title')
     if not title:
         title = os.path.splitext(os.path.basename(args.video))[0]
 
