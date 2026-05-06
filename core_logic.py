@@ -16,9 +16,22 @@ import os, sys, re, json, subprocess, time, random, argparse
 from datetime import datetime
 from pathlib import Path
 
-# Project root path setup (독립형 앱 구조)
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, APP_ROOT)
+# Project root path setup (독립형 앱 구조 및 PyInstaller 지원)
+if getattr(sys, 'frozen', False):
+    # 리소스(BGM, 효과음 등)는 앱 내부 임시 폴더
+    RESOURCE_ROOT = sys._MEIPASS
+    # 데이터(cache, output 등)는 앱 실행 파일 외부 폴더
+    exe_dir = os.path.dirname(sys.executable)
+    if sys.platform == 'darwin' and '.app/Contents/MacOS' in exe_dir:
+        DATA_ROOT = os.path.abspath(os.path.join(exe_dir, "../../../"))
+    else:
+        DATA_ROOT = exe_dir
+else:
+    RESOURCE_ROOT = os.path.dirname(os.path.abspath(__file__))
+    DATA_ROOT = RESOURCE_ROOT
+
+APP_ROOT = RESOURCE_ROOT # 기존 참조 호환용
+sys.path.insert(0, RESOURCE_ROOT)
 
 # Third-party imports
 import yt_dlp
@@ -34,13 +47,13 @@ try:
 except ImportError:
     FactChecker = None
 
-DOWNLOADS_DIR = os.path.join(APP_ROOT, "downloads")
-OUTPUT_DIR    = os.path.join(APP_ROOT, "output")
-CACHE_DIR     = os.path.join(APP_ROOT, "cache", "creative_beta")
-RESOURCE_DIR  = os.path.join(APP_ROOT, "resources", "sfx")
-BGM_DIR       = os.path.join(APP_ROOT, "resources", "bgm")
+DOWNLOADS_DIR = os.path.join(DATA_ROOT, "downloads")
+OUTPUT_DIR    = os.path.join(DATA_ROOT, "output")
+CACHE_DIR     = os.path.join(DATA_ROOT, "cache", "creative_beta")
+RESOURCE_DIR  = os.path.join(RESOURCE_ROOT, "resources", "sfx")
+BGM_DIR       = os.path.join(RESOURCE_ROOT, "resources", "bgm")
 TTS_CACHE_DIR = os.path.join(OUTPUT_DIR, "tts_cache")
-CHANNELS_CONFIG_PATH = os.path.join(APP_ROOT, "cache", "channels_config.json")
+CHANNELS_CONFIG_PATH = os.path.join(DATA_ROOT, "cache", "channels_config.json")
 
 for d in [DOWNLOADS_DIR, OUTPUT_DIR, CACHE_DIR, BGM_DIR, RESOURCE_DIR, TTS_CACHE_DIR, os.path.dirname(CHANNELS_CONFIG_PATH)]:
     os.makedirs(d, exist_ok=True)

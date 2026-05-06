@@ -7,9 +7,22 @@ import subprocess
 import traceback
 from datetime import datetime
 
-# 앱 루트 경로 설정 (독립형 구조)
-APP_ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, APP_ROOT)
+# 경로 설정 (리소스와 데이터 저장 분리)
+if getattr(sys, 'frozen', False):
+    # 리소스(BGM, 효과음 등)는 앱 내부 임시 폴더
+    RESOURCE_ROOT = sys._MEIPASS
+    # 데이터(cache, output 등)는 앱 실행 파일 외부 폴더
+    exe_dir = os.path.dirname(sys.executable)
+    if sys.platform == 'darwin' and '.app/Contents/MacOS' in exe_dir:
+        DATA_ROOT = os.path.abspath(os.path.join(exe_dir, "../../../"))
+    else:
+        DATA_ROOT = exe_dir
+else:
+    RESOURCE_ROOT = os.path.dirname(os.path.abspath(__file__))
+    DATA_ROOT = RESOURCE_ROOT
+
+APP_ROOT = RESOURCE_ROOT # 기존 참조 호환용
+sys.path.insert(0, RESOURCE_ROOT)
 
 # PyQt6 임포트 (기존 프로젝트 기준)
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -38,7 +51,7 @@ from src.utils.youtube_uploader import YouTubeUploader
 import glob
 
 # ─── 채널 데이터 관리 ─────────────────────────────────────────────────────────
-CHANNELS_FILE = os.path.join(APP_ROOT, "cache", "channels.json")
+CHANNELS_FILE = os.path.join(DATA_ROOT, "cache", "channels.json")
 
 def _load_channels_data():
     if not os.path.exists(CHANNELS_FILE):
@@ -1305,6 +1318,19 @@ class PyQtCreativeShortsGUI(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = PyQtCreativeShortsGUI()
-    window.show()
-    sys.exit(app.exec())
+    try:
+        window = PyQtCreativeShortsGUI()
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        import traceback
+        error_msg = f"프로그램 시작 중 오류가 발생했습니다:\n\n{str(e)}\n\n{traceback.format_exc()}"
+        print(error_msg)
+        
+        # 앱 인스턴스가 살아있을 때만 메시지 박스 표시 가능
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Icon.Critical)
+        msg.setWindowTitle("실행 오류")
+        msg.setText(error_msg)
+        msg.exec()
+        sys.exit(1)
